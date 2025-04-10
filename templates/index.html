@@ -58,7 +58,6 @@
       <option value="purple">Purple</option>
       <option value="orange">Orange</option>
     </select>
-    <button onclick="saveDrawings()">Save Now</button>
     <button id="switchView">Switch to Satellite</button>
     <button id="toggleLabels" onclick="togglePhoneLabels()">Hide Phone Labels</button>
     <div id="phoneList">
@@ -86,18 +85,36 @@
 
     let drawing = false, currentLine = null, color = document.getElementById("colorPicker").value;
     let drawnItems = [];
+    
+    let lastUpdateTime = 0;
 
     document.getElementById("startDraw").onclick = () => { drawing = true; disableMapInteraction(); };
     document.getElementById("stopDraw").onclick = () => { drawing = false; currentLine = null; enableMapInteraction(); };
-    document.getElementById("clear").onclick = () => { drawnItems.forEach(line => map.removeLayer(line)); drawnItems = []; };
+    
+    document.getElementById("clear").onclick = () => { 
+      drawnItems.forEach(line => map.removeLayer(line)); 
+      drawnItems = []; 
+      fetch("/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([])
+      });
+    };
+    
     document.getElementById("colorPicker").onchange = (e) => { color = e.target.value; };
 
     map.on("mousedown", function (e) {
       if (!drawing) return;
       currentLine = L.polyline([e.latlng], { color: color, weight: 3 }).addTo(map);
+      currentLine.options.drawingColor = color;
       drawnItems.push(currentLine);
+      
       map.on("mousemove", onMouseMove);
-      map.once("mouseup", () => { map.off("mousemove", onMouseMove); currentLine = null; });
+      map.once("mouseup", () => { 
+        map.off("mousemove", onMouseMove);
+        saveDrawing(currentLine);
+        currentLine = null; 
+      });
     });
 
     function onMouseMove(e) {
@@ -116,20 +133,53 @@
       map.keyboard.enable(); map.getContainer().style.cursor = '';
     }
 
-    function saveDrawings() {
-      const geojson = drawnItems.map(line => line.toGeoJSON());
+    function saveDrawing(line) {
+      const geojson = line.toGeoJSON();
+      geojson.properties = { color: line.options.drawingColor };
+      
       fetch("/save", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(geojson)
-      }).then(res => res.json()).then(data => console.log("Saved:", data));
+        method: "POST", 
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([geojson])
+      }).then(res => res.json())
+        .then(data => console.log("Saved drawing:", data))
+        .catch(err => console.error("Error saving drawing:", err));
     }
 
-    fetch("/load").then(res => res.json()).then(data => {
-      data.forEach(feature => {
-        const line = L.geoJSON(feature, { style: { color: feature.properties?.color || 'red', weight: 3 } }).addTo(map);
-        drawnItems.push(line);
+    function saveDrawings() {
+      const geojson = drawnItems.map(line => {
+        const geo = line.toGeoJSON();
+        geo.properties = { color: line.options.drawingColor };
+        return geo;
       });
-    });
+      
+      fetch("/save", {
+        method: "POST", 
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(geojson)
+      }).then(res => res.json())
+        .then(data => console.log("Saved all drawings:", data))
+        .catch(err => console.error("Error saving drawings:", err));
+    }
+
+    function loadDrawings() {
+      fetch("/load")
+        .then(res => res.json())
+        .then(data => {
+          drawnItems.forEach(line => map.removeLayer(line));
+          drawnItems = [];
+          
+          data.forEach(feature => {
+            const color = feature.properties?.color || 'red';
+            const line = L.geoJSON(feature, { 
+              style: { color: color, weight: 3 }
+            }).addTo(map);
+            line.options.drawingColor = color;
+            drawnItems.push(line);
+          });
+        })
+        .catch(err => console.error("Error loading drawings:", err));
+    }
 
     const phones = {};
 
@@ -197,12 +247,11 @@
         phoneLabelsVisible ? "Hide Phone Labels" : "Show Phone Labels";
     }
 
-    window.addEventListener("beforeunload", () => {
-      saveDrawings();
-    });
-
-    setInterval(updateAllPhones, 5000);
+    loadDrawings();
     updateAllPhones();
+    
+    setInterval(loadDrawings, 3000);
+    setInterval(updateAllPhones, 5000);
 
     document.getElementById('toggleMenu').addEventListener('click', () => {
       document.getElementById('controls').classList.toggle('hidden');
