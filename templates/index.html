@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Leaflet Multi-Phone Tracker with Drawing</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+    #map {
+      height: 100%;
+      width: 100%;
+    }
+    #controls {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 10px;
+      border-radius: 8px;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+    #controls.hidden {
+      opacity: 0;
+      visibility: hidden;
+    }
+    button, select, input {
+      margin: 4px 0;
+      width: 100%;
+    }
+    .phone-label {
+      background: white;
+      padding: 10px 20px; /* Increased padding for better coverage */
+      border-radius: 4px;
+      font-size: 12px;
+      display: inline-block; /* Ensures the bubble wraps the content */
+    }
+    #phoneList {
+      margin-top: 10px;
+      border-top: 1px solid #ccc;
+      padding-top: 10px;
+    }
+    #phoneEntries {
+      max-height: 120px;
+      overflow-y: auto;
+      margin-bottom: 5px;
+    }
+    .phone-entry {
+      display: flex;
+      align-items: center;
+      margin-bottom: 6px;
+      padding: 4px;
+      background-color: rgba(240, 240, 240, 0.5);
+      border-radius: 4px;
+    }
+    .phone-entry input[type="checkbox"] {
+      width: auto;
+      margin-right: 8px;
+      margin-top: 0;
+      margin-bottom: 0;
+      vertical-align: middle;
+      transform: scale(1.2);
+    }
+    .phone-entry span {
+      vertical-align: middle;
+      line-height: 1;
+      font-size: 14px;
+    }
+    #toggleMenu {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1100;
+      padding: 8px 12px;
+      border: none;
+      background-color: white;
+      border-radius: 4px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+      cursor: pointer;
+      transition: background-color 0.3s;
+      width: 50%;
+    }
+    #toggleMenu:hover {
+      background-color: #f0f0f0;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <button id="toggleMenu" title="Toggle Menu">Toggle Menu</button>
+  <div id="controls">
+    <button id="startDraw">Start Drawing</button>
+    <button id="stopDraw">Stop Drawing</button>
+    <button id="clear">Clear</button>
+    <label for="colorPicker">Color:</label>
+    <select id="colorPicker">
+      <option value="red">Red</option>
+      <option value="blue">Blue</option>
+      <option value="green">Green</option>
+      <option value="black">Black</option>
+      <option value="purple">Purple</option>
+      <option value="orange">Orange</option>
+    </select>
+    <button onclick="saveDrawings()">Save Now</button>
+    <label>Phone IP:</label>
+    <input type="text" id="ipInput" placeholder="e.g. 192.168.1.89">
+    <label>Phone Label:</label>
+    <input type="text" id="labelInput" placeholder="e.g. John's Phone">
+    <button onclick="connectPhone()">Add Phone</button>
+    <button id="switchView">Switch to Satellite</button>
+    <button onclick="savePhones()">Save Phones</button>
+    <button id="toggleLabels" onclick="togglePhoneLabels()">Hide Phone Labels</button>
+    
+    <div id="phoneList">
+      <h4>Tracked Phones</h4>
+      <div id="phoneEntries"></div>
+      <button onclick="deleteSelectedPhones()">Delete Selected Phones</button>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    });
+    const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles © Esri — Source: Esri, Earthstar Geographics',
+      maxZoom: 18
+    });
+    const map = L.map('map', {
+      center: [37.7749, -122.4194],
+      zoom: 5,
+      layers: [streetLayer]
+    });
+    let currentBaseLayer = 'street';
+
+    document.getElementById("switchView").onclick = function () {
+      if (currentBaseLayer === 'street') {
+        map.removeLayer(streetLayer);
+        map.addLayer(satelliteLayer);
+        currentBaseLayer = 'satellite';
+        this.innerText = "Switch to Street View";
+      } else {
+        map.removeLayer(satelliteLayer);
+        map.addLayer(streetLayer);
+        currentBaseLayer = 'street';
+        this.innerText = "Switch to Satellite";
+      }
+    };
+
+    let drawing = false;
+    let currentLine = null;
+    let color = document.getElementById("colorPicker").value;
+    let drawnItems = [];
+
+    const disableMapInteraction = () => {
+      map.dragging.disable();
+      map.scrollWheelZoom.disable();
+      map.doubleClickZoom.disable();
+      map.boxZoom.disable();
+      map.keyboard.disable();
+      map.getContainer().style.cursor = 'crosshair';
+    };
+
+    const enableMapInteraction = () => {
+      map.dragging.enable();
+      map.scrollWheelZoom.enable();
+      map.doubleClickZoom.enable();
+      map.boxZoom.enable();
+      map.keyboard.enable();
+      map.getContainer().style.cursor = '';
+    };
+
+    document.getElementById("startDraw").addEventListener("click", () => {
+      drawing = true;
+      disableMapInteraction();
+    });
+
+    document.getElementById("stopDraw").addEventListener("click", () => {
+      drawing = false;
+      currentLine = null;
+      enableMapInteraction();
+    });
+
+    document.getElementById("clear").addEventListener("click", () => {
+      drawnItems.forEach(line => map.removeLayer(line));
+      drawnItems = [];
+    });
+
+    document.getElementById("colorPicker").addEventListener("change", (e) => {
+      color = e.target.value;
+    });
+
+    map.on("mousedown", function (e) {
+      if (!drawing) return;
+      currentLine = L.polyline([e.latlng], { color: color, weight: 3 }).addTo(map);
+      drawnItems.push(currentLine);
+      map.on("mousemove", onMouseMove);
+      map.once("mouseup", function () {
+        map.off("mousemove", onMouseMove);
+        currentLine = null;
+      });
+    });
+
+    function onMouseMove(e) {
+      if (!currentLine) return;
+      currentLine.addLatLng(e.latlng);
+    }
+
+    function saveDrawings() {
+      const geojson = drawnItems.map(line => line.toGeoJSON());
+      fetch("/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(geojson)
+      }).then(res => res.json()).then(data => {
+        console.log("Saved:", data);
+      });
+    }
+
+    fetch("/load")
+      .then(res => res.json())
+      .then(data => {
+        data.forEach(feature => {
+          const line = L.geoJSON(feature, {
+            style: { color: feature.properties?.color || 'red', weight: 3 }
+          }).addTo(map);
+          drawnItems.push(line);
+        });
+      });
+
+    const phones = {};
+
+    // Load saved phones
+    fetch("/load_phones")
+      .then(res => res.json())
+      .then(data => {
+        Object.keys(data).forEach(ip => {
+          phones[ip] = { marker: null, label: null };
+          trackPhone(ip, data[ip]);
+          const intervalId = setInterval(() => trackPhone(ip, data[ip]), 5000);
+          phones[ip].intervalId = intervalId;
+        });
+        updatePhoneList(); // Update phone list after loading
+      })
+      .catch(err => console.error("Error loading saved phones:", err));
+
+    function connectPhone() {
+      const ip = document.getElementById('ipInput').value.trim();
+      const label = document.getElementById('labelInput').value.trim();
+      if (!ip || !label) {
+        alert('Please enter both an IP address and a label.');
+        return;
+      }
+      if (phones[ip]) {
+        alert('This phone is already being tracked.');
+        return;
+      }
+      phones[ip] = { marker: null, label: null };
+      trackPhone(ip, label);
+      const intervalId = setInterval(() => trackPhone(ip, label), 5000);
+      phones[ip].intervalId = intervalId;
+
+      // Clear input fields
+      document.getElementById('ipInput').value = '';
+      document.getElementById('labelInput').value = '';
+
+      // Save the updated phones list to the server
+      savePhones();
+      
+      // Update phone list
+      updatePhoneList();
+    }
+
+    function savePhones() {
+      const phoneData = {};
+      Object.keys(phones).forEach(ip => {
+        // Store the label for each phone
+        if (phones[ip].label && phones[ip].label._icon) {
+          phoneData[ip] = phones[ip].label._icon.innerHTML;
+        }
+      });
+
+      fetch("/save_phones", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(phoneData)
+      })
+      .then(res => res.json())
+      .then(data => {
+        console.log("Phones saved:", data);
+      })
+      .catch(err => console.error("Error saving phones:", err));
+    }
+
+    function trackPhone(ip, label) {
+      fetch(`http://${ip}:5000/location`)
+        .then(res => res.json())
+        .then(data => {
+          if (!data.lat || !data.lng) return;
+          const latlng = [data.lat, data.lng];
+          if (phones[ip].marker) {
+            phones[ip].marker.setLatLng(latlng);
+            phones[ip].label.setLatLng(latlng);
+          } else {
+            phones[ip].marker = L.marker(latlng, {
+              icon: L.icon({
+                iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
+                iconSize: [32, 32],
+                iconAnchor: [16, 32]
+              })
+            }).addTo(map);
+            phones[ip].label = L.marker(latlng, {
+              icon: L.divIcon({
+                className: 'phone-label',
+                html: label,
+                iconAnchor: [-5, -10]
+              })
+            }).addTo(map);
+          }
+          updatePhoneList(); // Update phone list after successful tracking
+        })
+        .catch(err => console.error(`Error tracking ${label} (${ip}):`, err));
+    }
+
+    // Function to update the phone list display
+    function updatePhoneList() {
+      const phoneEntries = document.getElementById('phoneEntries');
+      phoneEntries.innerHTML = '';
+      
+      const ips = Object.keys(phones);
+      if (ips.length === 0) {
+        phoneEntries.innerHTML = '<p>No phones being tracked</p>';
+        return;
+      }
+      
+      ips.forEach(ip => {
+        const label = phones[ip].label && phones[ip].label._icon ? 
+          phones[ip].label._icon.innerHTML : 'Unknown';
+        
+        const entry = document.createElement('div');
+        entry.className = 'phone-entry';
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = ip;
+        checkbox.name = 'phoneToDelete';
+        
+        const text = document.createElement('span');
+        text.textContent = `${label} (${ip})`;
+        
+        entry.appendChild(checkbox);
+        entry.appendChild(text);
+        phoneEntries.appendChild(entry);
+      });
+    }
+
+    // Function to delete selected phones
+    function deleteSelectedPhones() {
+      const checkboxes = document.querySelectorAll('input[name="phoneToDelete"]:checked');
+      if (checkboxes.length === 0) {
+        alert('No phones selected for deletion');
+        return;
+      }
+      
+      if (confirm(`Delete ${checkboxes.length} selected phone(s)?`)) {
+        checkboxes.forEach(checkbox => {
+          const ip = checkbox.value;
+          
+          // Remove from map
+          if (phones[ip].marker) map.removeLayer(phones[ip].marker);
+          if (phones[ip].label) map.removeLayer(phones[ip].label);
+          
+          // Remove interval timers
+          if (phones[ip].intervalId) {
+            clearInterval(phones[ip].intervalId);
+          }
+          
+          // Delete from phones object
+          delete phones[ip];
+        });
+        
+        // Update UI
+        updatePhoneList();
+        
+        // Save changes to server
+        savePhones();
+      }
+    }
+
+    let phoneLabelsVisible = true; // Global flag to track phone label visibility
+
+    function togglePhoneLabels() {
+      phoneLabelsVisible = !phoneLabelsVisible;
+      Object.keys(phones).forEach(ip => {
+        if (phones[ip].label) {
+          phones[ip].label.setOpacity(phoneLabelsVisible ? 1 : 0);
+        }
+      });
+      document.getElementById("toggleLabels").innerText = phoneLabelsVisible ? "Hide Phone Labels" : "Show Phone Labels";
+    }
+
+    window.addEventListener("beforeunload", () => {
+      saveDrawings();
+      savePhones();
+    });
+    
+    // Initialize phone list
+    updatePhoneList();
+
+    // Toggle the controls with a fade effect
+    const toggleMenuBtn = document.getElementById('toggleMenu');
+    const controls = document.getElementById('controls');
+
+    toggleMenuBtn.addEventListener('click', () => {
+      if (controls.classList.contains('hidden')) {
+        controls.classList.remove('hidden');
+      } else {
+        controls.classList.add('hidden');
+      }
+    });
+  </script>
+</body>
+</html>
