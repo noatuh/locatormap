@@ -1,10 +1,15 @@
-from flask import Flask, jsonify
-from flask_cors import CORS  # ⬅️ Add this
+from flask import Flask
+from flask_cors import CORS
 import subprocess
+import requests
 import json
+import time
+
+SERVER_URL = "http://24.95.169.161:5000/update_location"
+PHONE_ID = "nota"  # You can customize this per phone
 
 app = Flask(__name__)
-CORS(app)  # ⬅️ Enable CORS globally
+CORS(app)
 
 def get_gps_coords():
     try:
@@ -19,14 +24,21 @@ def get_gps_coords():
         print("Error getting location:", e)
     return None, None
 
-@app.route('/location')
-def location():
+def send_location():
     lat, lon = get_gps_coords()
     if lat is not None and lon is not None:
-        return jsonify({"lat": lat, "lng": lon})
-    else:
-        return jsonify({"error": "Unable to get GPS data"}), 500
+        try:
+            response = requests.post(SERVER_URL, json={
+                "id": PHONE_ID,
+                "lat": lat,
+                "lng": lon
+            })
+            print("Sent:", response.status_code, response.json())
+        except Exception as e:
+            print("Error sending location:", e)
 
 if __name__ == "__main__":
-    print("GPS server running at http://192.168.1.89:5000/location")
-    app.run(host="0.0.0.0", port=5000)
+    print(f"Starting GPS location sender for {PHONE_ID}")
+    while True:
+        send_location()
+        time.sleep(5)  # Send every 5 seconds (tweak as needed)

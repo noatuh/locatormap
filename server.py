@@ -38,5 +38,27 @@ def load_phones():
             return jsonify(json.load(f))
     return jsonify({})
 
+@app.route("/update_location", methods=["POST"])
+def update_location():
+    data = request.get_json()
+    phone_id = data.get("id")
+    lat = data.get("lat")
+    lng = data.get("lng")
+
+    if phone_id and lat is not None and lng is not None:
+        phones = {}
+        if os.path.exists(PHONES_FILE):
+            with open(PHONES_FILE, "r") as f:
+                phones = json.load(f)
+
+        phones[phone_id] = {"lat": lat, "lng": lng}
+
+        with open(PHONES_FILE, "w") as f:
+            json.dump(phones, f)
+
+        return jsonify({"status": "location updated"})
+    
+    return jsonify({"error": "missing data"}), 400
+
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0")
