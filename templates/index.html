@@ -40,6 +40,33 @@
       cursor: pointer; transition: background-color 0.3s; width: 50%;
     }
     #toggleMenu:hover { background-color: #f0f0f0; }
+    
+    /* Add grid and POI pin styles */
+    .grid-label {
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid #666;
+      border-radius: 3px;
+      padding: 2px 4px;
+      font-weight: bold;
+      font-size: 14px;
+      text-align: center;
+    }
+    .poi-popup .leaflet-popup-content-wrapper {
+      background-color: rgba(255, 255, 255, 0.9);
+      border-radius: 8px;
+    }
+    .poi-popup .leaflet-popup-tip {
+      background-color: rgba(255, 255, 255, 0.9);
+    }
+    .poi-title {
+      font-weight: bold;
+      font-size: 14px;
+      margin-bottom: 5px;
+    }
+    .poi-description {
+      font-size: 12px;
+      white-space: pre-wrap;
+    }
   </style>
 </head>
 <body>
@@ -59,7 +86,32 @@
       <option value="orange">Orange</option>
     </select>
     <button id="switchView">Switch to Satellite</button>
+    <button id="toggleGrid">Show Grid</button>
     <button id="toggleLabels" onclick="togglePhoneLabels()">Hide Phone Labels</button>
+    
+    <!-- Add POI controls -->
+    <div style="border-top: 1px solid #ccc; margin-top: 10px; padding-top: 10px;">
+      <h4>Points of Interest</h4>
+      <button id="startPlacingPin">Place New Pin</button>
+      <button id="togglePins">Hide Pins</button>
+      <div id="pinDialog" style="display: none; margin-top: 8px;">
+        <input type="text" id="pinTitle" placeholder="Title" style="margin-bottom: 4px;">
+        <textarea id="pinDescription" placeholder="Description (optional)" style="width: 100%; height: 50px;"></textarea>
+        <select id="pinColor" style="margin-top: 4px;">
+          <option value="#FF0000">Red</option>
+          <option value="#0000FF">Blue</option>
+          <option value="#008000">Green</option>
+          <option value="#FFA500">Orange</option>
+          <option value="#800080">Purple</option>
+          <option value="#000000">Black</option>
+        </select>
+        <div style="display: flex; margin-top: 4px;">
+          <button id="savePin" style="flex: 1; margin-right: 4px;">Save</button>
+          <button id="cancelPin" style="flex: 1;">Cancel</button>
+        </div>
+      </div>
+    </div>
+    
     <div id="phoneList">
       <h4>Tracked Phones</h4>
       <div id="phoneEntries"></div>
@@ -247,11 +299,227 @@
         phoneLabelsVisible ? "Hide Phone Labels" : "Show Phone Labels";
     }
 
+    // Grid implementation
+    let gridVisible = false;
+    let gridLayer = null;
+    let gridLabels = [];
+    const GRID_SIZE = 1; // Grid size in degrees
+
+    function createGrid() {
+      // Remove existing grid if any
+      if (gridLayer) {
+        map.removeLayer(gridLayer);
+        gridLabels.forEach(label => map.removeLayer(label));
+        gridLabels = [];
+      }
+      
+      gridLayer = L.layerGroup().addTo(map);
+      
+      // Get map bounds with some padding
+      const bounds = map.getBounds();
+      const north = Math.ceil(bounds.getNorth());
+      const south = Math.floor(bounds.getSouth());
+      const east = Math.ceil(bounds.getEast());
+      const west = Math.floor(bounds.getWest());
+      
+      // Create vertical grid lines
+      for (let lng = Math.floor(west); lng <= east; lng += GRID_SIZE) {
+        L.polyline([[south, lng], [north, lng]], {
+          color: 'rgba(0,0,0,0.4)',
+          weight: 1,
+          dashArray: '5,5'
+        }).addTo(gridLayer);
+      }
+      
+      // Create horizontal grid lines
+      for (let lat = Math.floor(south); lat <= north; lat += GRID_SIZE) {
+        L.polyline([[lat, west], [lat, east]], {
+          color: 'rgba(0,0,0,0.4)',
+          weight: 1,
+          dashArray: '5,5'
+        }).addTo(gridLayer);
+      }
+      
+      // Add grid labels
+      for (let lat = Math.floor(south); lat <= north; lat += GRID_SIZE) {
+        for (let lng = Math.floor(west); lng <= east; lng += GRID_SIZE) {
+          const letterIndex = Math.floor((lng - west) / GRID_SIZE);
+          const numberIndex = Math.floor((lat - south) / GRID_SIZE);
+          
+          // Convert to A1, B2 style references
+          const letter = String.fromCharCode(65 + letterIndex % 26); // A, B, C, ...
+          const number = numberIndex + 1; // 1, 2, 3, ...
+          const gridRef = letter + number;
+          
+          const label = L.marker([lat + GRID_SIZE/2, lng + GRID_SIZE/2], {
+            icon: L.divIcon({
+              className: 'grid-label',
+              html: gridRef,
+              iconSize: [40, 20],
+              iconAnchor: [20, 10]
+            })
+          }).addTo(gridLayer);
+          gridLabels.push(label);
+        }
+      }
+    }
+
+    document.getElementById("toggleGrid").addEventListener('click', function() {
+      gridVisible = !gridVisible;
+      if (gridVisible) {
+        createGrid();
+        this.innerText = "Hide Grid";
+        
+        // When showing grid, add zoom end handler to recreate grid
+        map.on('zoomend moveend', createGrid);
+      } else {
+        if (gridLayer) {
+          map.removeLayer(gridLayer);
+          gridLabels.forEach(label => map.removeLayer(label));
+          gridLabels = [];
+        }
+        this.innerText = "Show Grid";
+        
+        // Remove handler when grid is hidden
+        map.off('zoomend moveend', createGrid);
+      }
+    });
+
+    // POI pins implementation
+    let pins = [];
+    let pinsVisible = true;
+    let placingPin = false;
+    let pinsLayer = L.layerGroup().addTo(map);
+
+    function createPinMarker(poi) {
+      const marker = L.marker([poi.lat, poi.lng], {
+        icon: L.divIcon({
+          className: 'poi-marker',
+          html: `<svg width="24" height="36" viewBox="0 0 24 36" fill="${poi.color}" 
+                 xmlns="http://www.w3.org/2000/svg">
+                 <path d="M12 0C5.4 0 0 5.4 0 12c0 7.2 12 24 12 24s12-16.8 12-24c0-6.6-5.4-12-12-12z" 
+                 stroke="#000" stroke-width="1"/>
+                 </svg>`,
+          iconSize: [24, 36],
+          iconAnchor: [12, 36],
+          popupAnchor: [0, -36]
+        })
+      }).addTo(pinsLayer);
+
+      const popupContent = `
+        <div class="poi-title">${poi.title}</div>
+        <div class="poi-description">${poi.description || ''}</div>
+      `;
+      
+      marker.bindPopup(popupContent, {
+        className: 'poi-popup',
+        closeButton: true
+      });
+      
+      // Store reference to original POI data
+      marker.poi = poi;
+
+      return marker;
+    }
+
+    function savePOI(poi) {
+      fetch("/save_poi", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(poi)
+      })
+      .then(res => res.json())
+      .then(data => {
+        console.log("Saved POI:", data);
+        loadPOIs(); // Refresh to ensure consistency
+      })
+      .catch(err => console.error("Error saving POI:", err));
+    }
+
+    function loadPOIs() {
+      fetch("/load_pois")
+        .then(res => res.json())
+        .then(data => {
+          // Clear existing pins
+          pinsLayer.clearLayers();
+          pins = [];
+          
+          // Add all pins from server
+          data.forEach(poi => {
+            const marker = createPinMarker(poi);
+            pins.push(marker);
+          });
+        })
+        .catch(err => console.error("Error loading POIs:", err));
+    }
+
+    // Pin placement mode
+    document.getElementById("startPlacingPin").addEventListener('click', function() {
+      placingPin = true;
+      this.disabled = true;
+      map.getContainer().style.cursor = 'crosshair';
+      
+      // One-time click handler for pin placement
+      const clickHandler = function(e) {
+        document.getElementById("pinDialog").style.display = "block";
+        document.getElementById("startPlacingPin").disabled = false;
+        
+        document.getElementById("savePin").onclick = function() {
+          const title = document.getElementById("pinTitle").value;
+          if (!title) {
+            alert("Please enter a title for the pin");
+            return;
+          }
+          
+          const poi = {
+            id: Date.now().toString(), // Generate unique ID
+            lat: e.latlng.lat,
+            lng: e.latlng.lng,
+            title: title,
+            description: document.getElementById("pinDescription").value,
+            color: document.getElementById("pinColor").value
+          };
+          
+          savePOI(poi);
+          
+          // Reset UI
+          document.getElementById("pinDialog").style.display = "none";
+          document.getElementById("pinTitle").value = "";
+          document.getElementById("pinDescription").value = "";
+          map.getContainer().style.cursor = '';
+        };
+        
+        document.getElementById("cancelPin").onclick = function() {
+          document.getElementById("pinDialog").style.display = "none";
+          map.getContainer().style.cursor = '';
+        };
+        
+        placingPin = false;
+        map.off('click', clickHandler);
+      };
+      
+      map.once('click', clickHandler);
+    });
+
+    // Toggle pins visibility
+    document.getElementById("togglePins").addEventListener('click', function() {
+      pinsVisible = !pinsVisible;
+      if (pinsVisible) {
+        map.addLayer(pinsLayer);
+        this.innerText = "Hide Pins";
+      } else {
+        map.removeLayer(pinsLayer);
+        this.innerText = "Show Pins";
+      }
+    });
+
     loadDrawings();
     updateAllPhones();
+    loadPOIs();
     
     setInterval(loadDrawings, 3000);
     setInterval(updateAllPhones, 5000);
+    setInterval(loadPOIs, 5000);  // Sync POIs every 5 seconds
 
     document.getElementById('toggleMenu').addEventListener('click', () => {
       document.getElementById('controls').classList.toggle('hidden');
