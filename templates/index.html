@@ -94,6 +94,7 @@
       <h4>Points of Interest</h4>
       <button id="startPlacingPin">Place New Pin</button>
       <button id="togglePins">Hide Pins</button>
+      <button id="clearAllPins">Clear All Pins</button>
       <div id="pinDialog" style="display: none; margin-top: 8px;">
         <input type="text" id="pinTitle" placeholder="Title" style="margin-bottom: 4px;">
         <textarea id="pinDescription" placeholder="Description (optional)" style="width: 100%; height: 50px;"></textarea>
@@ -409,6 +410,8 @@
       const popupContent = `
         <div class="poi-title">${poi.title}</div>
         <div class="poi-description">${poi.description || ''}</div>
+        <button class="delete-poi-btn" style="margin-top: 8px; background-color: #ff4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; width: 100%;" 
+          data-poi-id="${poi.id}">Delete Pin</button>
       `;
       
       marker.bindPopup(popupContent, {
@@ -418,6 +421,14 @@
       
       // Store reference to original POI data
       marker.poi = poi;
+
+      // Add event listener for delete button after popup opens
+      marker.on('popupopen', function() {
+        document.querySelector('.delete-poi-btn[data-poi-id="'+poi.id+'"]').addEventListener('click', function() {
+          deletePOI(poi.id);
+          map.closePopup();
+        });
+      });
 
       return marker;
     }
@@ -451,6 +462,40 @@
           });
         })
         .catch(err => console.error("Error loading POIs:", err));
+    }
+
+    function deletePOI(poiId) {
+      fetch("/delete_poi", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: poiId })
+      })
+      .then(res => res.json())
+      .then(data => {
+        console.log("Deleted POI:", data);
+        loadPOIs(); // Refresh pins after deletion
+      })
+      .catch(err => console.error("Error deleting POI:", err));
+    }
+
+    function clearAllPins() {
+      if (confirm("Are you sure you want to delete all pins? This cannot be undone.")) {
+        // Clear pins from map
+        pinsLayer.clearLayers();
+        pins = [];
+        
+        // Send request to delete all POIs on server
+        fetch("/save_poi", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify([])
+        })
+        .then(res => res.json())
+        .then(data => {
+          console.log("Cleared all POIs");
+        })
+        .catch(err => console.error("Error clearing POIs:", err));
+      }
     }
 
     // Pin placement mode
@@ -512,6 +557,8 @@
         this.innerText = "Show Pins";
       }
     });
+
+    document.getElementById("clearAllPins").addEventListener('click', clearAllPins);
 
     loadDrawings();
     updateAllPhones();
