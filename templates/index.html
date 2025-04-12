@@ -43,13 +43,13 @@
     
     /* Add grid and POI pin styles */
     .grid-label {
-      background: rgba(255, 255, 255, 0.7);
-      border: 1px solid #666;
-      border-radius: 3px;
+      background: transparent;
+      border: none;
       padding: 2px 4px;
       font-weight: bold;
       font-size: 14px;
       text-align: center;
+      text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
     }
     .poi-popup .leaflet-popup-content-wrapper {
       background-color: rgba(255, 255, 255, 0.9);
@@ -116,6 +116,7 @@
     <div id="phoneList">
       <h4>Tracked Phones</h4>
       <div id="phoneEntries"></div>
+      <button id="clearAllPhones">Clear All Phones</button>
     </div>
   </div>
 
@@ -298,6 +299,34 @@
       });
       document.getElementById("toggleLabels").innerText =
         phoneLabelsVisible ? "Hide Phone Labels" : "Show Phone Labels";
+    }
+
+    function clearAllPhones() {
+      if (confirm("Are you sure you want to clear all tracked phones? This cannot be undone.")) {
+        // Clear phones from map
+        Object.keys(phones).forEach(id => {
+          if (phones[id].marker) map.removeLayer(phones[id].marker);
+          if (phones[id].label) map.removeLayer(phones[id].label);
+        });
+        
+        // Clear phones object
+        Object.keys(phones).forEach(id => {
+          delete phones[id];
+        });
+        
+        // Send request to clear phones on server
+        fetch("/save_phones", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({})
+        })
+        .then(res => res.json())
+        .then(data => {
+          console.log("Cleared all phones");
+          updatePhoneList(); // Update the UI
+        })
+        .catch(err => console.error("Error clearing phones:", err));
+      }
     }
 
     // Grid implementation with fixed global reference
@@ -604,6 +633,7 @@
     });
 
     document.getElementById("clearAllPins").addEventListener('click', clearAllPins);
+    document.getElementById("clearAllPhones").addEventListener('click', clearAllPhones);
 
     loadDrawings();
     updateAllPhones();
