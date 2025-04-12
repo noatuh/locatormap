@@ -89,6 +89,16 @@
     <button id="toggleGrid">Show Grid</button>
     <button id="toggleLabels" onclick="togglePhoneLabels()">Hide Phone Labels</button>
     
+    <!-- Add measurement controls after drawing controls -->
+    <div style="border-top: 1px solid #ccc; margin-top: 10px; padding-top: 10px;">
+      <h4>Distance Measurement</h4>
+      <button id="startMeasuring">Measure Distance</button>
+      <button id="clearMeasurements">Clear All Measurements</button>
+      <div id="measurementInfo" style="margin-top: 8px; display: none;">
+        <p style="margin: 0; font-size: 14px; color: #555;">Click two points to measure distance</p>
+      </div>
+    </div>
+
     <!-- Add POI controls -->
     <div style="border-top: 1px solid #ccc; margin-top: 10px; padding-top: 10px;">
       <h4>Points of Interest</h4>
@@ -635,13 +645,168 @@
     document.getElementById("clearAllPins").addEventListener('click', clearAllPins);
     document.getElementById("clearAllPhones").addEventListener('click', clearAllPhones);
 
+    // Distance measurement implementation
+    let measuring = false;
+    let measureStart = null;
+    let measurements = [];
+    let measurementsLayer = L.layerGroup().addTo(map);
+    
+    function startMeasuring() {
+      measuring = true;
+      measureStart = null;
+      document.getElementById('startMeasuring').innerText = 'Cancel Measuring';
+      document.getElementById('measurementInfo').style.display = 'block';
+      map.getContainer().style.cursor = 'crosshair';
+    }
+    
+    function stopMeasuring() {
+      measuring = false;
+      measureStart = null;
+      document.getElementById('startMeasuring').innerText = 'Measure Distance';
+      document.getElementById('measurementInfo').style.display = 'none';
+      map.getContainer().style.cursor = '';
+    }
+    
+    map.on('click', function(e) {
+      if (!measuring) return;
+      
+      if (measureStart === null) {
+        // First point clicked
+        measureStart = e.latlng;
+      } else {
+        // Second point clicked, create the measurement line
+        const measureEnd = e.latlng;
+        
+        // Calculate distance in meters and yards
+        const distanceMeters = measureStart.distanceTo(measureEnd);
+        const distanceYards = distanceMeters * 1.09361;
+        
+        // Create a measurement object
+        const measurement = {
+          id: Date.now().toString(),
+          start: [measureStart.lat, measureStart.lng],
+          end: [measureEnd.lat, measureEnd.lng],
+          distanceMeters: Math.round(distanceMeters),
+          distanceYards: Math.round(distanceYards)
+        };
+        
+        // Add to local measurements and draw
+        addMeasurementLine(measurement);
+        
+        // Save to server
+        saveMeasurement(measurement);
+        
+        // Reset for next measurement
+        measureStart = null;
+      }
+    });
+    
+    function addMeasurementLine(measurement) {
+      const line = L.polyline([measurement.start, measurement.end], {
+        color: '#FF6B00',
+        weight: 3,
+        dashArray: '5, 5',
+        opacity: 0.7
+      }).addTo(measurementsLayer);
+      
+      // Create label with distance
+      const midpoint = L.latLng(
+        (measurement.start[0] + measurement.end[0]) / 2,
+        (measurement.start[1] + measurement.end[1]) / 2
+      );
+      
+      const label = L.marker(midpoint, {
+        icon: L.divIcon({
+          className: 'distance-label',
+          html: `<div style="background-color: white; padding: 3px 8px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.3);">
+                 <b>${measurement.distanceMeters}m</b> (${measurement.distanceYards}yds)
+                 </div>`,
+          iconSize: [100, 40],
+          iconAnchor: [50, 20]
+        })
+      }).addTo(measurementsLayer);
+      
+      // Store reference to map objects
+      measurement.line = line;
+      measurement.label = label;
+      measurements.push(measurement);
+    }
+    
+    function saveMeasurement(measurement) {
+      // Create a clean copy without Leaflet objects
+      const cleanMeasurement = {
+        id: measurement.id,
+        start: measurement.start,
+        end: measurement.end,
+        distanceMeters: measurement.distanceMeters,
+        distanceYards: measurement.distanceYards
+      };
+      
+      fetch("/save_measurement", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cleanMeasurement)
+      })
+      .then(res => res.json())
+      .then(data => {
+        console.log("Saved measurement:", data);
+      })
+      .catch(err => console.error("Error saving measurement:", err));
+    }
+    
+    function loadMeasurements() {
+      fetch("/load_measurements")
+        .then(res => res.json())
+        .then(data => {
+          // Clear existing measurements
+          measurementsLayer.clearLayers();
+          measurements = [];
+          
+          // Add all measurements from server
+          data.forEach(measurement => {
+            addMeasurementLine(measurement);
+          });
+        })
+        .catch(err => console.error("Error loading measurements:", err));
+    }
+    
+    function clearAllMeasurements() {
+      if (confirm("Are you sure you want to clear all distance measurements? This cannot be undone.")) {
+        measurementsLayer.clearLayers();
+        measurements = [];
+        
+        fetch("/clear_measurements", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({})
+        })
+        .then(res => res.json())
+        .then(data => {
+          console.log("Cleared all measurements");
+        })
+        .catch(err => console.error("Error clearing measurements:", err));
+      }
+    }
+    
+    document.getElementById("startMeasuring").addEventListener('click', function() {
+      if (measuring) {
+        stopMeasuring();
+      } else {
+        startMeasuring();
+      }
+    });
+    
+    document.getElementById("clearMeasurements").addEventListener('click', clearAllMeasurements);
+
     loadDrawings();
     updateAllPhones();
     loadPOIs();
+    loadMeasurements();
     
     setInterval(loadDrawings, 3000);
     setInterval(updateAllPhones, 5000);
-    setInterval(loadPOIs, 5000);  // Sync POIs every 5 seconds
+    setInterval(loadPOIs, 5000);
+    setInterval(loadMeasurements, 5000);
 
     document.getElementById('toggleMenu').addEventListener('click', () => {
       document.getElementById('controls').classList.toggle('hidden');

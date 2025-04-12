@@ -5,6 +5,7 @@ import os
 app = Flask(__name__)
 DATA_FILE = "drawings.json"
 PHONES_FILE = "phones.json"
+MEASUREMENTS_FILE = "measurements.json"
 
 @app.route("/")
 def index():
@@ -123,6 +124,56 @@ def delete_poi():
                 return jsonify({"error": "Failed to parse POIs file"}), 500
     
     return jsonify({"error": "No POIs found"}), 404
+
+@app.route("/save_measurement", methods=["POST"])
+def save_measurement():
+    measurement = request.get_json()
+    
+    if not os.path.exists(MEASUREMENTS_FILE):
+        with open(MEASUREMENTS_FILE, "w") as f:
+            json.dump([], f)
+    
+    # Load existing measurements
+    with open(MEASUREMENTS_FILE, "r") as f:
+        try:
+            measurements = json.load(f)
+        except json.JSONDecodeError:
+            measurements = []
+    
+    # Update or add measurement
+    found = False
+    for i, m in enumerate(measurements):
+        if m.get("id") == measurement.get("id"):
+            measurements[i] = measurement
+            found = True
+            break
+    
+    if not found:
+        measurements.append(measurement)
+    
+    # Save back to file
+    with open(MEASUREMENTS_FILE, "w") as f:
+        json.dump(measurements, f)
+    
+    return jsonify({"status": "saved", "id": measurement.get("id")})
+
+@app.route("/load_measurements", methods=["GET"])
+def load_measurements():
+    if not os.path.exists(MEASUREMENTS_FILE):
+        return jsonify([])
+    
+    with open(MEASUREMENTS_FILE, "r") as f:
+        try:
+            measurements = json.load(f)
+            return jsonify(measurements)
+        except json.JSONDecodeError:
+            return jsonify([])
+
+@app.route("/clear_measurements", methods=["POST"])
+def clear_measurements():
+    with open(MEASUREMENTS_FILE, "w") as f:
+        json.dump([], f)
+    return jsonify({"status": "cleared"})
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0")
