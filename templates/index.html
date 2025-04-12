@@ -300,11 +300,14 @@
         phoneLabelsVisible ? "Hide Phone Labels" : "Show Phone Labels";
     }
 
-    // Grid implementation
+    // Grid implementation with fixed global reference
     let gridVisible = false;
     let gridLayer = null;
     let gridLabels = [];
-    const GRID_SIZE = 1; // Grid size in degrees
+    const MIN_ZOOM_FOR_GRID = 14; // Only show grid at very zoomed in levels
+    const MAX_ZOOM_FOR_GRID = 22; // No upper limit (or use max zoom level supported)
+    const GRID_SIZE = 0.005; // Tiny grid size for close-up view
+    const MAX_CELLS = 250; // Limited number of cells to prevent performance issues
 
     function createGrid() {
       // Remove existing grid if any
@@ -314,43 +317,85 @@
         gridLabels = [];
       }
       
+      // Only create grid if it should be visible
+      if (!gridVisible) return;
+      
+      // Check if current zoom level is appropriate for the grid
+      const currentZoom = map.getZoom();
+      if (currentZoom < MIN_ZOOM_FOR_GRID) {
+        document.getElementById("toggleGrid").innerText = "Show Grid (Zoom in more)";
+        document.getElementById("toggleGrid").style.opacity = "0.7";
+        console.log("Grid disabled: Not zoomed in enough (" + currentZoom + ")");
+        return; // Don't create grid when not zoomed in enough
+      }
+      
+      console.log("Creating grid with fixed GRID_SIZE: " + GRID_SIZE + " at zoom level: " + currentZoom);
+      
       gridLayer = L.layerGroup().addTo(map);
       
-      // Get map bounds with some padding
+      // Get map bounds
       const bounds = map.getBounds();
-      const north = Math.ceil(bounds.getNorth());
-      const south = Math.floor(bounds.getSouth());
-      const east = Math.ceil(bounds.getEast());
-      const west = Math.floor(bounds.getWest());
+      const north = bounds.getNorth();
+      const south = bounds.getSouth();
+      const east = bounds.getEast();
+      const west = bounds.getWest();
+      
+      // Calculate grid start positions (align with global grid)
+      const startLng = Math.floor(west / GRID_SIZE) * GRID_SIZE;
+      const startLat = Math.floor(south / GRID_SIZE) * GRID_SIZE;
+      const endLng = Math.ceil(east / GRID_SIZE) * GRID_SIZE;
+      const endLat = Math.ceil(north / GRID_SIZE) * GRID_SIZE;
+      
+      // Calculate cell count based on actual grid size
+      const cellCount = Math.ceil((endLat - startLat) / GRID_SIZE) * Math.ceil((endLng - startLng) / GRID_SIZE);
+      
+      if (cellCount > MAX_CELLS) {
+        console.log("Grid disabled: Too many cells (" + cellCount + " > " + MAX_CELLS + ")");
+        map.removeLayer(gridLayer);
+        document.getElementById("toggleGrid").innerText = "Show Grid (Zoom in more)";
+        document.getElementById("toggleGrid").style.opacity = "0.7";
+        return;
+      }
+      
+      document.getElementById("toggleGrid").innerText = "Hide Grid";
+      document.getElementById("toggleGrid").style.opacity = "1";
       
       // Create vertical grid lines
-      for (let lng = Math.floor(west); lng <= east; lng += GRID_SIZE) {
+      for (let lng = startLng; lng <= endLng; lng += GRID_SIZE) {
         L.polyline([[south, lng], [north, lng]], {
-          color: 'rgba(0,0,0,0.4)',
+          color: 'rgba(0,0,0,0.5)',
           weight: 1,
-          dashArray: '5,5'
+          dashArray: '2,2'
         }).addTo(gridLayer);
       }
       
       // Create horizontal grid lines
-      for (let lat = Math.floor(south); lat <= north; lat += GRID_SIZE) {
+      for (let lat = startLat; lat <= endLat; lat += GRID_SIZE) {
         L.polyline([[lat, west], [lat, east]], {
-          color: 'rgba(0,0,0,0.4)',
+          color: 'rgba(0,0,0,0.5)',
           weight: 1,
-          dashArray: '5,5'
+          dashArray: '2,2'
         }).addTo(gridLayer);
       }
       
-      // Add grid labels
-      for (let lat = Math.floor(south); lat <= north; lat += GRID_SIZE) {
-        for (let lng = Math.floor(west); lng <= east; lng += GRID_SIZE) {
-          const letterIndex = Math.floor((lng - west) / GRID_SIZE);
-          const numberIndex = Math.floor((lat - south) / GRID_SIZE);
+      // Add grid labels with fixed global references
+      for (let lat = startLat; lat <= endLat; lat += GRID_SIZE) {
+        for (let lng = startLng; lng <= endLng; lng += GRID_SIZE) {
+          // Calculate global reference values based on absolute position
+          const letterIndex = Math.floor((lng + 180) / GRID_SIZE);
+          const numberIndex = Math.floor((lat + 90) / GRID_SIZE);
           
-          // Convert to A1, B2 style references
-          const letter = String.fromCharCode(65 + letterIndex % 26); // A, B, C, ...
-          const number = numberIndex + 1; // 1, 2, 3, ...
-          const gridRef = letter + number;
+          // Create consistent global grid references
+          let letter = '';
+          let letterValue = letterIndex;
+          
+          // Convert to multi-letter (AA, AB, etc.) for values over 26
+          do {
+            letter = String.fromCharCode(65 + (letterValue % 26)) + letter;
+            letterValue = Math.floor(letterValue / 26) - 1;
+          } while (letterValue >= 0);
+          
+          const gridRef = letter + numberIndex;
           
           const label = L.marker([lat + GRID_SIZE/2, lng + GRID_SIZE/2], {
             icon: L.divIcon({
@@ -367,10 +412,9 @@
 
     document.getElementById("toggleGrid").addEventListener('click', function() {
       gridVisible = !gridVisible;
+      
       if (gridVisible) {
         createGrid();
-        this.innerText = "Hide Grid";
-        
         // When showing grid, add zoom end handler to recreate grid
         map.on('zoomend moveend', createGrid);
       } else {
@@ -380,6 +424,7 @@
           gridLabels = [];
         }
         this.innerText = "Show Grid";
+        this.style.opacity = "1";
         
         // Remove handler when grid is hidden
         map.off('zoomend moveend', createGrid);
