@@ -6,7 +6,7 @@ import json
 import time
 import sys
 
-DEFAULT_SERVER_IP = "24.95.169.161:5050"
+DEFAULT_SERVER_IP = "24.95.163.76:5050"
 
 app = Flask(__name__)
 CORS(app)
