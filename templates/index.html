@@ -90,6 +90,110 @@
       font-size: 12px;
       white-space: pre-wrap;
     }
+    
+    /* Camera window styles */
+    #cameraWindow {
+      position: fixed;
+      top: 50px;
+      left: 50px;
+      width: 320px;
+      height: 280px;
+      background: white;
+      border: 2px solid #333;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      z-index: 2000;
+      display: none;
+      resize: both;
+      overflow: hidden;
+      min-width: 250px;
+      min-height: 200px;
+    }
+    
+    #cameraWindowHeader {
+      background: #333;
+      color: white;
+      padding: 8px 12px;
+      cursor: move;
+      user-select: none;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 14px;
+      font-weight: bold;
+    }
+    
+    #cameraWindowContent {
+      padding: 12px;
+      height: calc(100% - 44px);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .camera-image-container {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 0;
+      overflow: hidden;
+      margin-bottom: 8px;
+      max-width: 100%;
+      max-height: 100%;
+    }
+    
+    #cameraWindowSelector {
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 4px;
+    }
+    
+    #cameraWindowImage {
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: auto;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      display: block;
+      margin: 0;
+      transform: rotate(-90deg); /* Default landscape orientation */
+      transition: transform 0.3s ease;
+      object-fit: contain;
+      box-sizing: border-box;
+    }
+    
+    .camera-controls {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      gap: 5px;
+    }
+    
+    .camera-controls button {
+      flex: 1;
+      padding: 4px 8px;
+      font-size: 11px;
+      border: 1px solid #ccc;
+      background: #f5f5f5;
+      cursor: pointer;
+      border-radius: 3px;
+    }
+    
+    .camera-controls button:hover {
+      background: #e5e5e5;
+    }
+    
+    #cameraWindowStatus {
+      font-size: 12px;
+      color: #666;
+      text-align: center;
+    }
+    
+    .camera-window-dragging {
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -161,6 +265,36 @@
       <h4>Tracked Phones</h4>
       <div id="phoneEntries"></div>
       <button id="clearAllPhones">Clear All Phones</button>
+    </div>
+
+    <!-- Camera controls -->
+    <div style="border-top: 1px solid #ccc; margin-top: 10px; padding-top: 10px;">
+      <h4>Camera Feed</h4>
+      <button id="toggleCameraWindow">Open Camera Window</button>
+    </div>
+  </div>
+
+  <!-- Draggable Camera Window -->
+  <div id="cameraWindow">
+    <div id="cameraWindowHeader">
+      <span>Camera Feed</span>
+    </div>
+    <div id="cameraWindowContent">
+      <select id="cameraWindowSelector">
+        <option value="">Select phone...</option>
+      </select>
+      <div class="camera-controls">
+        <button id="rotateLeft">⟲ Left</button>
+        <button id="resetRotation">Reset</button>
+        <button id="rotateRight">Right ⟳</button>
+      </div>
+      <div class="camera-controls">
+        <button id="downloadImage">📥 Download Image</button>
+      </div>
+      <div class="camera-image-container">
+        <img id="cameraWindowImage" alt="No camera feed">
+      </div>
+      <div id="cameraWindowStatus">No camera selected</div>
     </div>
   </div>
 
@@ -380,16 +514,21 @@
       const ids = Object.keys(phones);
       if (ids.length === 0) {
         phoneEntries.innerHTML = '<p>No phones being tracked</p>';
-        return;
+      } else {
+        ids.forEach(id => {
+          const entry = document.createElement('div');
+          entry.className = 'phone-entry';
+          const text = document.createElement('span');
+          text.textContent = `${id}`;
+          entry.appendChild(text);
+          phoneEntries.appendChild(entry);
+        });
       }
-      ids.forEach(id => {
-        const entry = document.createElement('div');
-        entry.className = 'phone-entry';
-        const text = document.createElement('span');
-        text.textContent = `${id}`;
-        entry.appendChild(text);
-        phoneEntries.appendChild(entry);
-      });
+      
+      // Update camera phone selector if camera window is open
+      if (cameraWindowOpen) {
+        updateCameraPhoneSelector();
+      }
     }
 
     let phoneLabelsVisible = true;
@@ -891,6 +1030,259 @@
     });
     
     document.getElementById("clearMeasurements").addEventListener('click', clearAllMeasurements);
+
+    // Draggable Camera Window functionality
+    let cameraWindowOpen = false;
+    let selectedCameraPhone = '';
+    let cameraUpdateInterval = null;
+    let isDragging = false;
+    let dragOffset = { x: 0, y: 0 };
+    let currentRotation = -90; // Start with landscape orientation (portrait phone rotated left)
+
+    function toggleCameraWindow() {
+      const cameraWindow = document.getElementById('cameraWindow');
+      const toggleButton = document.getElementById('toggleCameraWindow');
+      
+      if (cameraWindowOpen) {
+        // Close the camera window
+        cameraWindow.style.display = 'none';
+        cameraWindowOpen = false;
+        toggleButton.textContent = 'Open Camera Window';
+        
+        if (cameraUpdateInterval) {
+          clearInterval(cameraUpdateInterval);
+          cameraUpdateInterval = null;
+        }
+        // Also clear the image src to free up memory
+        const img = document.getElementById('cameraWindowImage');
+        img.src = '';
+        const status = document.getElementById('cameraWindowStatus');
+        status.textContent = 'Camera window closed';
+        status.style.color = '#666';
+      } else {
+        // Open the camera window
+        cameraWindow.style.display = 'block';
+        cameraWindowOpen = true;
+        toggleButton.textContent = 'Close Camera Window';
+        updateCameraPhoneSelector();
+      }
+    }
+
+    function updateCameraPhoneSelector() {
+      const selector = document.getElementById('cameraWindowSelector');
+      const currentPhones = Object.keys(phones);
+      
+      // Clear and repopulate selector
+      selector.innerHTML = '<option value="">Select phone...</option>';
+      currentPhones.forEach(phoneId => {
+        const option = document.createElement('option');
+        option.value = phoneId;
+        option.textContent = phoneId;
+        if (phoneId === selectedCameraPhone) {
+          option.selected = true;
+        }
+        selector.appendChild(option);
+      });
+    }
+
+    function updateCameraWindowFeed() {
+      if (!selectedCameraPhone) return;
+      
+      const img = document.getElementById('cameraWindowImage');
+      const status = document.getElementById('cameraWindowStatus');
+      
+      // Add timestamp to prevent caching
+      const timestamp = new Date().getTime();
+      const imageUrl = `/get_photo/${selectedCameraPhone}?t=${timestamp}`;
+      
+      // Create a new image to test if it loads
+      const testImg = new Image();
+      testImg.onload = function() {
+        img.src = imageUrl;
+        status.textContent = `${selectedCameraPhone} - Last updated: ${new Date().toLocaleTimeString()}`;
+        status.style.color = '#666';
+      };
+      testImg.onerror = function() {
+        status.textContent = `No camera feed from ${selectedCameraPhone}`;
+        status.style.color = '#999';
+      };
+      testImg.src = imageUrl;
+    }
+
+    function rotateImageLeft() {
+      currentRotation -= 90;
+      updateImageRotation();
+    }
+
+    function rotateImageRight() {
+      currentRotation += 90;
+      updateImageRotation();
+    }
+
+    function resetImageRotation() {
+      currentRotation = -90; // Reset to default landscape
+      updateImageRotation();
+    }
+
+    function updateImageRotation() {
+      const img = document.getElementById('cameraWindowImage');
+      img.style.transform = `rotate(${currentRotation}deg)`;
+    }
+
+    function downloadCurrentImage() {
+      if (!selectedCameraPhone) {
+        alert('Please select a phone first to download its image.');
+        return;
+      }
+
+      const img = document.getElementById('cameraWindowImage');
+      if (!img.src || img.src === '') {
+        alert('No image is currently loaded to download.');
+        return;
+      }
+
+      // Create a canvas to capture the rotated image
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // Create a new image object to work with
+      const sourceImg = new Image();
+      sourceImg.crossOrigin = 'anonymous'; // Handle CORS if needed
+      
+      sourceImg.onload = function() {
+        // Set canvas dimensions based on rotation
+        const isRotated = (Math.abs(currentRotation) % 180) === 90;
+        if (isRotated) {
+          canvas.width = sourceImg.height;
+          canvas.height = sourceImg.width;
+        } else {
+          canvas.width = sourceImg.width;
+          canvas.height = sourceImg.height;
+        }
+        
+        // Apply rotation and draw image
+        ctx.save();
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate((currentRotation * Math.PI) / 180);
+        ctx.drawImage(sourceImg, -sourceImg.width / 2, -sourceImg.height / 2);
+        ctx.restore();
+        
+        // Create download link
+        canvas.toBlob(function(blob) {
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          
+          // Generate filename with timestamp and phone ID
+          const now = new Date();
+          const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, -5);
+          link.download = `camera-${selectedCameraPhone}-${timestamp}.jpg`;
+          
+          // Trigger download
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+          
+          console.log(`Downloaded image from ${selectedCameraPhone}`);
+        }, 'image/jpeg', 0.9);
+      };
+      
+      sourceImg.onerror = function() {
+        alert('Failed to load image for download. Please try again.');
+      };
+      
+      // Load the current image
+      sourceImg.src = img.src;
+    }
+
+    function onCameraPhoneSelected() {
+      const selector = document.getElementById('cameraWindowSelector');
+      selectedCameraPhone = selector.value;
+      
+      if (cameraUpdateInterval) {
+        clearInterval(cameraUpdateInterval);
+        cameraUpdateInterval = null;
+      }
+      
+      if (selectedCameraPhone) {
+        updateCameraWindowFeed();
+        // Update camera feed every 2 seconds
+        cameraUpdateInterval = setInterval(updateCameraWindowFeed, 2000);
+      } else {
+        const img = document.getElementById('cameraWindowImage');
+        const status = document.getElementById('cameraWindowStatus');
+        img.src = '';
+        status.textContent = 'No camera selected';
+        status.style.color = '#666';
+      }
+    }
+
+    // Make camera window draggable
+    function initializeCameraWindowDragging() {
+      const cameraWindow = document.getElementById('cameraWindow');
+      const header = document.getElementById('cameraWindowHeader');
+      
+      header.addEventListener('mousedown', function(e) {
+        isDragging = true;
+        const rect = cameraWindow.getBoundingClientRect();
+        dragOffset.x = e.clientX - rect.left;
+        dragOffset.y = e.clientY - rect.top;
+        
+        document.body.classList.add('camera-window-dragging');
+        e.preventDefault();
+      });
+      
+      document.addEventListener('mousemove', function(e) {
+        if (isDragging) {
+          const newX = e.clientX - dragOffset.x;
+          const newY = e.clientY - dragOffset.y;
+          
+          // Keep window within viewport bounds
+          const maxX = window.innerWidth - cameraWindow.offsetWidth;
+          const maxY = window.innerHeight - cameraWindow.offsetHeight;
+          
+          cameraWindow.style.left = Math.max(0, Math.min(newX, maxX)) + 'px';
+          cameraWindow.style.top = Math.max(0, Math.min(newY, maxY)) + 'px';
+        }
+      });
+      
+      document.addEventListener('mouseup', function() {
+        if (isDragging) {
+          isDragging = false;
+          document.body.classList.remove('camera-window-dragging');
+        }
+      });
+    }
+
+    // Event listeners for camera window
+    document.getElementById('toggleCameraWindow').addEventListener('click', toggleCameraWindow);
+    document.getElementById('cameraWindowSelector').addEventListener('change', onCameraPhoneSelected);
+    
+    // Add double-click on header to close (alternative method)
+    document.getElementById('cameraWindowHeader').addEventListener('dblclick', function(e) {
+      if (cameraWindowOpen) {
+        toggleCameraWindow();
+      }
+    });
+    
+    // Add ESC key support to close camera window
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && cameraWindowOpen) {
+        toggleCameraWindow();
+      }
+    });
+    
+    // Rotation control event listeners
+    document.getElementById('rotateLeft').addEventListener('click', rotateImageLeft);
+    document.getElementById('rotateRight').addEventListener('click', rotateImageRight);
+    document.getElementById('resetRotation').addEventListener('click', resetImageRotation);
+    
+    // Download button event listener
+    document.getElementById('downloadImage').addEventListener('click', downloadCurrentImage);
+    
+    // Initialize dragging functionality
+    initializeCameraWindowDragging();
 
     loadDrawings();
     updateAllPhones();
