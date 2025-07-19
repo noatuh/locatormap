@@ -31,13 +31,93 @@
     #passwordError {
       color: red; margin-top: 10px; display: none;
     }
+    
+    /* Right sidebar for map controls */
     #controls {
       position: absolute; top: 10px; right: 10px; z-index: 1000;
       background: rgba(255, 255, 255, 0.9); padding: 10px; border-radius: 8px;
       transition: opacity 0.3s ease, visibility 0.3s ease;
+      width: 250px;
     }
     #controls.hidden { opacity: 0; visibility: hidden; }
-    button, select, input { margin: 4px 0; width: 100%; }
+    
+    /* Left sidebar for notes */
+    #notesPanel {
+      position: fixed; top: 0; left: 0; width: 320px; height: 100%;
+      background: rgba(255, 255, 255, 0.95); z-index: 1000;
+      box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+      display: flex; flex-direction: column;
+      transition: transform 0.3s ease;
+    }
+    #notesPanel.hidden {
+      transform: translateX(-100%);
+    }
+    
+    #notesPanelHeader {
+      background: #343a40; color: white; padding: 15px;
+      font-size: 18px; font-weight: bold; text-align: center;
+    }
+    
+    #notesPanelContent {
+      flex: 1; padding: 15px; overflow: hidden;
+      display: flex; flex-direction: column;
+    }
+    
+    #notesControls {
+      margin-bottom: 15px;
+      display: flex; gap: 8px;
+    }
+    
+    #notesControls button {
+      flex: 1; padding: 8px 12px; border: none; border-radius: 4px;
+      cursor: pointer; font-size: 14px;
+    }
+    
+    #addNote {
+      background: #28a745; color: white;
+    }
+    #addNote:hover {
+      background: #218838;
+    }
+    
+    #refreshNotes {
+      background: #17a2b8; color: white;
+    }
+    #refreshNotes:hover {
+      background: #138496;
+    }
+    
+    /* Toggle buttons at bottom */
+    #toggleButtons {
+      position: absolute; bottom: 15px; left: 50%;
+      transform: translateX(-50%); z-index: 1100;
+      width: 340px; /* Wide enough to place buttons 170px from center */
+      display: flex; justify-content: space-between;
+      align-items: center;
+    }
+    
+    .toggle-btn {
+      padding: 10px 20px; border: none; background-color: white;
+      border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      cursor: pointer; transition: all 0.3s ease;
+      font-size: 14px; font-weight: 500;
+      min-width: 120px;
+      white-space: nowrap;
+    }
+    .toggle-btn:hover { 
+      background-color: #f0f0f0; 
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      transform: translateY(-1px);
+    }
+    
+    #toggleNotes, #toggleMenu {
+      background: linear-gradient(135deg, #007bff, #6610f2);
+      color: white;
+    }
+    #toggleNotes:hover, #toggleMenu:hover {
+      background: linear-gradient(135deg, #0056b3, #520dc2);
+      color: white;
+    }
     .phone-label {
       background: white; padding: 10px 20px; border-radius: 4px;
       font-size: 12px; display: inline-block;
@@ -55,14 +135,6 @@
     .phone-entry span {
       vertical-align: middle; line-height: 1; font-size: 14px;
     }
-    #toggleMenu {
-      position: absolute; bottom: 10px; left: 50%;
-      transform: translateX(-50%); z-index: 1100;
-      padding: 8px 12px; border: none; background-color: white;
-      border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-      cursor: pointer; transition: background-color 0.3s; width: 50%;
-    }
-    #toggleMenu:hover { background-color: #f0f0f0; }
     
     /* Add grid and POI pin styles */
     .grid-label {
@@ -194,6 +266,133 @@
     .camera-window-dragging {
       pointer-events: none;
     }
+
+    /* Notes styles */
+    #notesList {
+      flex: 1;
+      overflow-y: auto;
+      margin-top: 8px;
+    }
+
+    #noNotesMessage {
+      color: #666;
+      font-style: italic;
+      margin: 20px 0;
+      text-align: center;
+    }
+
+    .note-item {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .note-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      font-weight: bold;
+      color: #495057;
+    }
+
+    .note-timestamp {
+      font-size: 11px;
+      color: #6c757d;
+      font-weight: normal;
+    }
+
+    .note-content {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      line-height: 1.4;
+      color: #212529;
+    }
+
+    .note-delete-btn {
+      background: #dc3545;
+      color: white;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 11px;
+      margin-left: 8px;
+    }
+
+    .note-delete-btn:hover {
+      background: #c82333;
+    }
+
+    /* Note input dialog */
+    #noteDialog {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border: 2px solid #333;
+      border-radius: 8px;
+      padding: 25px;
+      z-index: 3000;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      display: none;
+      min-width: 400px;
+    }
+
+    #noteDialog h3 {
+      margin: 0 0 20px 0;
+      color: #333;
+      text-align: center;
+    }
+
+    #noteDialog textarea {
+      width: 100%;
+      min-height: 120px;
+      margin-bottom: 15px;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 14px;
+      resize: vertical;
+    }
+
+    .note-dialog-buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .note-dialog-buttons button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    #saveNoteBtn {
+      background: #007bff;
+      color: white;
+    }
+
+    #saveNoteBtn:hover {
+      background: #0056b3;
+    }
+
+    #cancelNoteBtn {
+      background: #6c757d;
+      color: white;
+    }
+
+    #cancelNoteBtn:hover {
+      background: #545b62;
+    }
   </style>
 </head>
 <body>
@@ -209,7 +408,28 @@
   </div>
 
   <div id="map"></div>
-  <button id="toggleMenu">Toggle Menu</button>
+  
+  <!-- Toggle buttons -->
+  <div id="toggleButtons">
+    <button id="toggleNotes" class="toggle-btn">Toggle Notes</button>
+    <button id="toggleMenu" class="toggle-btn">Toggle Menu</button>
+  </div>
+  
+  <!-- Left sidebar for notes -->
+  <div id="notesPanel" class="hidden">
+    <div id="notesPanelHeader">
+      📝 Team Notes
+    </div>
+    <div id="notesPanelContent">
+      <div id="notesControls">
+        <button id="addNote">Add Note</button>
+        <button id="refreshNotes">Refresh</button>
+      </div>
+      <div id="notesList">
+        <p id="noNotesMessage">No notes posted yet</p>
+      </div>
+    </div>
+  </div>
   <div id="controls">
     <button id="startDraw">Start Drawing</button>
     <button id="stopDraw">Stop Drawing</button>
@@ -271,6 +491,16 @@
     <div style="border-top: 1px solid #ccc; margin-top: 10px; padding-top: 10px;">
       <h4>Camera Feed</h4>
       <button id="toggleCameraWindow">Open Camera Window</button>
+    </div>
+  </div>
+
+  <!-- Note input dialog -->
+  <div id="noteDialog">
+    <h3>Add Team Note</h3>
+    <textarea id="noteContent" placeholder="Enter your note here..."></textarea>
+    <div class="note-dialog-buttons">
+      <button id="cancelNoteBtn">Cancel</button>
+      <button id="saveNoteBtn">Post Note</button>
     </div>
   </div>
 
@@ -1284,18 +1514,196 @@
     // Initialize dragging functionality
     initializeCameraWindowDragging();
 
+    // Notes functionality
+    let notes = [];
+
+    function loadNotes() {
+      fetch("/load_notes")
+        .then(res => res.json())
+        .then(data => {
+          notes = data;
+          displayNotes();
+        })
+        .catch(err => console.error("Error loading notes:", err));
+    }
+
+    function displayNotes() {
+      const notesList = document.getElementById('notesList');
+      const noNotesMessage = document.getElementById('noNotesMessage');
+      
+      // Clear existing notes
+      notesList.innerHTML = '';
+      
+      if (notes.length === 0) {
+        notesList.appendChild(noNotesMessage);
+      } else {
+        // Sort notes by timestamp (newest first)
+        const sortedNotes = [...notes].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        sortedNotes.forEach(note => {
+          const noteElement = createNoteElement(note);
+          notesList.appendChild(noteElement);
+        });
+      }
+    }
+
+    function createNoteElement(note) {
+      const noteDiv = document.createElement('div');
+      noteDiv.className = 'note-item';
+      
+      const headerDiv = document.createElement('div');
+      headerDiv.className = 'note-header';
+      
+      const timestampSpan = document.createElement('span');
+      timestampSpan.className = 'note-timestamp';
+      timestampSpan.textContent = formatTimestamp(note.timestamp);
+      
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'note-delete-btn';
+      deleteBtn.textContent = '×';
+      deleteBtn.title = 'Delete note';
+      deleteBtn.onclick = function() {
+        if (confirm('Delete this note?')) {
+          deleteNote(note.id);
+        }
+      };
+      
+      headerDiv.appendChild(timestampSpan);
+      headerDiv.appendChild(deleteBtn);
+      
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'note-content';
+      contentDiv.textContent = note.content;
+      
+      noteDiv.appendChild(headerDiv);
+      noteDiv.appendChild(contentDiv);
+      
+      return noteDiv;
+    }
+
+    function formatTimestamp(timestamp) {
+      const date = new Date(timestamp);
+      const now = new Date();
+      const diffMs = now - date;
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMins / 60);
+      const diffDays = Math.floor(diffHours / 24);
+      
+      if (diffMins < 1) {
+        return 'Just now';
+      } else if (diffMins < 60) {
+        return `${diffMins}m ago`;
+      } else if (diffHours < 24) {
+        return `${diffHours}h ago`;
+      } else if (diffDays < 7) {
+        return `${diffDays}d ago`;
+      } else {
+        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+      }
+    }
+
+    function showAddNoteDialog() {
+      const dialog = document.getElementById('noteDialog');
+      const textarea = document.getElementById('noteContent');
+      
+      textarea.value = '';
+      dialog.style.display = 'block';
+      textarea.focus();
+    }
+
+    function hideAddNoteDialog() {
+      const dialog = document.getElementById('noteDialog');
+      dialog.style.display = 'none';
+    }
+
+    function saveNote() {
+      const content = document.getElementById('noteContent').value.trim();
+      
+      if (!content) {
+        alert('Please enter a note before posting.');
+        return;
+      }
+      
+      const note = {
+        id: Date.now().toString(),
+        content: content,
+        timestamp: new Date().toISOString()
+      };
+      
+      fetch("/save_note", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(note)
+      })
+      .then(res => res.json())
+      .then(data => {
+        console.log("Note saved:", data);
+        loadNotes(); // Refresh notes list
+        hideAddNoteDialog();
+      })
+      .catch(err => {
+        console.error("Error saving note:", err);
+        alert('Failed to save note. Please try again.');
+      });
+    }
+
+    function deleteNote(noteId) {
+      fetch("/delete_note", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: noteId })
+      })
+      .then(res => res.json())
+      .then(data => {
+        console.log("Note deleted:", data);
+        loadNotes(); // Refresh notes list
+      })
+      .catch(err => {
+        console.error("Error deleting note:", err);
+        alert('Failed to delete note. Please try again.');
+      });
+    }
+
+    // Notes event listeners
+    document.getElementById('addNote').addEventListener('click', showAddNoteDialog);
+    document.getElementById('refreshNotes').addEventListener('click', loadNotes);
+    document.getElementById('saveNoteBtn').addEventListener('click', saveNote);
+    document.getElementById('cancelNoteBtn').addEventListener('click', hideAddNoteDialog);
+    
+    // Allow Enter+Shift for new lines, but Enter alone posts the note
+    document.getElementById('noteContent').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        saveNote();
+      }
+    });
+    
+    // Close dialog when clicking outside
+    document.getElementById('noteDialog').addEventListener('click', function(e) {
+      if (e.target === this) {
+        hideAddNoteDialog();
+      }
+    });
+
     loadDrawings();
     updateAllPhones();
     loadPOIs();
     loadMeasurements();
+    loadNotes();
     
     setInterval(loadDrawings, 10000);  // Reduced frequency to prevent conflicts
     setInterval(updateAllPhones, 5000);
     setInterval(loadPOIs, 5000);
     setInterval(loadMeasurements, 5000);
+    setInterval(loadNotes, 5000);
 
+    // Toggle functionality for split buttons
     document.getElementById('toggleMenu').addEventListener('click', () => {
       document.getElementById('controls').classList.toggle('hidden');
+    });
+    
+    document.getElementById('toggleNotes').addEventListener('click', () => {
+      document.getElementById('notesPanel').classList.toggle('hidden');
     });
     
     } // End of initializeMap function

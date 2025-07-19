@@ -9,6 +9,7 @@ app = Flask(__name__)
 DATA_FILE = "drawings.json"
 PHONES_FILE = "phones.json"
 MEASUREMENTS_FILE = "measurements.json"
+NOTES_FILE = "notes.json"
 PHOTOS_DIR = "photos"
 CAMERA_PORT = 5051
 FRAME_MAPPING_FILE = "frame_mapping.json"
@@ -293,6 +294,76 @@ def clear_measurements():
 @app.route("/clear_pois", methods=["POST"])
 def clear_pois():
     with open("pois.json", "w") as f:
+        json.dump([], f)
+    return jsonify({"status": "cleared"})
+
+@app.route("/save_note", methods=["POST"])
+def save_note():
+    note_data = request.get_json()
+    note_id = note_data.get("id")
+    
+    if not os.path.exists(NOTES_FILE):
+        with open(NOTES_FILE, "w") as f:
+            json.dump([], f)
+    
+    # Load existing notes
+    with open(NOTES_FILE, "r") as f:
+        try:
+            notes = json.load(f)
+        except json.JSONDecodeError:
+            notes = []
+    
+    # Update or add note
+    found = False
+    for i, note in enumerate(notes):
+        if note.get("id") == note_id:
+            notes[i] = note_data
+            found = True
+            break
+    
+    if not found:
+        notes.append(note_data)
+    
+    # Save back to file
+    with open(NOTES_FILE, "w") as f:
+        json.dump(notes, f)
+    
+    return jsonify({"status": "saved", "id": note_id})
+
+@app.route("/load_notes", methods=["GET"])
+def load_notes():
+    if not os.path.exists(NOTES_FILE):
+        return jsonify([])
+    
+    with open(NOTES_FILE, "r") as f:
+        try:
+            notes = json.load(f)
+            return jsonify(notes)
+        except json.JSONDecodeError:
+            return jsonify([])
+
+@app.route("/delete_note", methods=["POST"])
+def delete_note():
+    note_id = request.get_json().get("id")
+    
+    if os.path.exists(NOTES_FILE):
+        with open(NOTES_FILE, "r") as f:
+            try:
+                notes = json.load(f)
+                notes = [note for note in notes if note.get("id") != note_id]
+                
+                with open(NOTES_FILE, "w") as f:
+                    json.dump(notes, f)
+                
+                return jsonify({"status": "deleted"})
+            except json.JSONDecodeError:
+                return jsonify({"error": "Failed to parse notes file"}), 500
+    
+    return jsonify({"error": "No notes found"}), 404
+
+@app.route("/clear_notes", methods=["POST"])
+def clear_notes():
+    with open(NOTES_FILE, "w") as f:
         json.dump([], f)
     return jsonify({"status": "cleared"})
 

@@ -2,6 +2,7 @@ phones.json
 drawings.json
 pois.json
 measurements.json
+notes.json
 
 # Camera frame files (max 5 phones)
 frame1.jpg
