@@ -8,6 +8,29 @@
   <style>
     html, body { margin: 0; padding: 0; height: 100%; }
     #map { height: 100%; width: 100%; }
+    #passwordOverlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background-color: rgba(0, 0, 0, 0.8); z-index: 10000;
+      display: flex; justify-content: center; align-items: center;
+    }
+    #passwordDialog {
+      background: white; padding: 30px; border-radius: 10px;
+      text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      min-width: 300px;
+    }
+    #passwordInput {
+      width: 100%; padding: 10px; margin: 15px 0;
+      border: 2px solid #ddd; border-radius: 5px; font-size: 16px;
+    }
+    #passwordSubmit {
+      background-color: #007bff; color: white; border: none;
+      padding: 10px 20px; border-radius: 5px; cursor: pointer;
+      font-size: 16px; width: 100%;
+    }
+    #passwordSubmit:hover { background-color: #0056b3; }
+    #passwordError {
+      color: red; margin-top: 10px; display: none;
+    }
     #controls {
       position: absolute; top: 10px; right: 10px; z-index: 1000;
       background: rgba(255, 255, 255, 0.9); padding: 10px; border-radius: 8px;
@@ -70,6 +93,17 @@
   </style>
 </head>
 <body>
+  <!-- Password overlay -->
+  <div id="passwordOverlay">
+    <div id="passwordDialog">
+      <h2>Access Required</h2>
+      <p>Please enter the password to access the map:</p>
+      <input type="password" id="passwordInput" placeholder="Enter password">
+      <button id="passwordSubmit">Submit</button>
+      <div id="passwordError">Incorrect password. Please try again.</div>
+    </div>
+  </div>
+
   <div id="map"></div>
   <button id="toggleMenu">Toggle Menu</button>
   <div id="controls">
@@ -132,6 +166,37 @@
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
+    // Password protection
+    const correctPassword = "1234";
+    
+    function checkPassword() {
+      const passwordInput = document.getElementById('passwordInput');
+      const passwordError = document.getElementById('passwordError');
+      const passwordOverlay = document.getElementById('passwordOverlay');
+      
+      if (passwordInput.value === correctPassword) {
+        passwordOverlay.style.display = 'none';
+        initializeMap();
+      } else {
+        passwordError.style.display = 'block';
+        passwordInput.value = '';
+        passwordInput.focus();
+      }
+    }
+    
+    document.getElementById('passwordSubmit').addEventListener('click', checkPassword);
+    document.getElementById('passwordInput').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        checkPassword();
+      }
+    });
+    
+    // Focus on password input when page loads
+    window.onload = function() {
+      document.getElementById('passwordInput').focus();
+    };
+    
+    function initializeMap() {
     const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
     const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
     const map = L.map('map', { center: [37.7749, -122.4194], zoom: 5, layers: [streetLayer] });
@@ -149,6 +214,7 @@
 
     let drawing = false, currentLine = null, color = document.getElementById("colorPicker").value;
     let drawnItems = [];
+    let lastLoadedDrawings = [];
     
     let lastUpdateTime = 0;
 
@@ -172,6 +238,14 @@
       currentLine = L.polyline([e.latlng], { color: color, weight: 3 }).addTo(map);
       currentLine.options.drawingColor = color;
       drawnItems.push(currentLine);
+      
+      // Add right-click context menu for deletion
+      currentLine.on('contextmenu', function(evt) {
+        evt.originalEvent.preventDefault(); // Prevent default browser context menu
+        if (confirm('Delete this line?')) {
+          deleteLine(this);
+        }
+      });
       
       map.on("mousemove", onMouseMove);
       map.once("mouseup", () => { 
@@ -197,17 +271,23 @@
       map.keyboard.enable(); map.getContainer().style.cursor = '';
     }
 
-    function saveDrawing(line) {
-      const geojson = line.toGeoJSON();
-      geojson.properties = { color: line.options.drawingColor };
+    function deleteLine(line) {
+      // Remove from map
+      map.removeLayer(line);
       
-      fetch("/save", {
-        method: "POST", 
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([geojson])
-      }).then(res => res.json())
-        .then(data => console.log("Saved drawing:", data))
-        .catch(err => console.error("Error saving drawing:", err));
+      // Remove from drawnItems array
+      const index = drawnItems.indexOf(line);
+      if (index > -1) {
+        drawnItems.splice(index, 1);
+      }
+      
+      // Save updated drawings to server
+      saveDrawings();
+    }
+
+    function saveDrawing(line) {
+      // Instead of saving just the current line, save all drawings
+      saveDrawings();
     }
 
     function saveDrawings() {
@@ -230,17 +310,31 @@
       fetch("/load")
         .then(res => res.json())
         .then(data => {
-          drawnItems.forEach(line => map.removeLayer(line));
-          drawnItems = [];
-          
-          data.forEach(feature => {
-            const color = feature.properties?.color || 'red';
-            const line = L.geoJSON(feature, { 
-              style: { color: color, weight: 3 }
-            }).addTo(map);
-            line.options.drawingColor = color;
-            drawnItems.push(line);
-          });
+          // Only update if the data has actually changed
+          if (JSON.stringify(data) !== JSON.stringify(lastLoadedDrawings)) {
+            drawnItems.forEach(line => map.removeLayer(line));
+            drawnItems = [];
+            
+            data.forEach(feature => {
+              const color = feature.properties?.color || 'red';
+              const line = L.geoJSON(feature, { 
+                style: { color: color, weight: 3 }
+              }).addTo(map);
+              line.options.drawingColor = color;
+              
+              // Add right-click context menu for deletion to loaded lines
+              line.on('contextmenu', function(evt) {
+                evt.originalEvent.preventDefault(); // Prevent default browser context menu
+                if (confirm('Delete this line?')) {
+                  deleteLine(this);
+                }
+              });
+              
+              drawnItems.push(line);
+            });
+            
+            lastLoadedDrawings = data;
+          }
         })
         .catch(err => console.error("Error loading drawings:", err));
     }
@@ -568,11 +662,11 @@
         pinsLayer.clearLayers();
         pins = [];
         
-        // Send request to delete all POIs on server
-        fetch("/save_poi", {
+        // Send request to clear all POIs on server
+        fetch("/clear_pois", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify([])
+          body: JSON.stringify({})
         })
         .then(res => res.json())
         .then(data => {
@@ -803,7 +897,7 @@
     loadPOIs();
     loadMeasurements();
     
-    setInterval(loadDrawings, 3000);
+    setInterval(loadDrawings, 10000);  // Reduced frequency to prevent conflicts
     setInterval(updateAllPhones, 5000);
     setInterval(loadPOIs, 5000);
     setInterval(loadMeasurements, 5000);
@@ -811,6 +905,8 @@
     document.getElementById('toggleMenu').addEventListener('click', () => {
       document.getElementById('controls').classList.toggle('hidden');
     });
+    
+    } // End of initializeMap function
   </script>
 </body>
 </html>

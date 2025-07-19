@@ -175,5 +175,11 @@ def clear_measurements():
         json.dump([], f)
     return jsonify({"status": "cleared"})
 
+@app.route("/clear_pois", methods=["POST"])
+def clear_pois():
+    with open("pois.json", "w") as f:
+        json.dump([], f)
+    return jsonify({"status": "cleared"})
+
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5050)
