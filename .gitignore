@@ -1,8 +1,5 @@
-phones.json
-drawings.json
-pois.json
-measurements.json
-notes.json
+# Ignore all JSON data files (contains personal/location information)
+*.json
 
 # Camera frame files (max 5 phones)
 frame1.jpg
