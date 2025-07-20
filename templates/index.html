@@ -393,6 +393,91 @@
     #cancelNoteBtn:hover {
       background: #545b62;
     }
+
+    /* Compass widget styles */
+    #compass {
+      position: fixed;
+      top: 75px;
+      left: 20px;
+      width: 80px;
+      height: 80px;
+      background: rgba(255, 255, 255, 0.95);
+      border: 2px solid #333;
+      border-radius: 50%;
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+      font-family: Arial, sans-serif;
+      font-weight: bold;
+    }
+
+    .compass-rose {
+      position: relative;
+      width: 60px;
+      height: 60px;
+    }
+
+    .compass-direction {
+      position: absolute;
+      font-size: 12px;
+      font-weight: bold;
+      color: #333;
+    }
+
+    .compass-direction.north {
+      top: 2px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #d32f2f;
+      font-size: 14px;
+    }
+
+    .compass-direction.south {
+      bottom: 2px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #333;
+    }
+
+    .compass-direction.east {
+      right: 2px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #333;
+    }
+
+    .compass-direction.west {
+      left: 2px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #333;
+    }
+
+    .compass-needle {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 2px;
+      height: 25px;
+      background: linear-gradient(to top, #666 0%, #d32f2f 70%);
+      transform: translate(-50%, -100%);
+      transform-origin: bottom;
+      border-radius: 1px;
+    }
+
+    .compass-needle::after {
+      content: '';
+      position: absolute;
+      top: -3px;
+      left: -2px;
+      width: 0;
+      height: 0;
+      border-left: 3px solid transparent;
+      border-right: 3px solid transparent;
+      border-bottom: 6px solid #d32f2f;
+    }
   </style>
 </head>
 <body>
@@ -408,6 +493,17 @@
   </div>
 
   <div id="map"></div>
+  
+  <!-- Compass widget -->
+  <div id="compass">
+    <div class="compass-rose">
+      <div class="compass-direction north">N</div>
+      <div class="compass-direction south">S</div>
+      <div class="compass-direction east">E</div>
+      <div class="compass-direction west">W</div>
+      <div class="compass-needle"></div>
+    </div>
+  </div>
   
   <!-- Toggle buttons -->
   <div id="toggleButtons">
