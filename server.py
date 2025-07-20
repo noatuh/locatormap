@@ -10,6 +10,7 @@ DATA_FILE = "drawings.json"
 PHONES_FILE = "phones.json"
 MEASUREMENTS_FILE = "measurements.json"
 NOTES_FILE = "notes.json"
+CAMERA_DIRECTIONS_FILE = "camera_directions.json"
 PHOTOS_DIR = "photos"
 CAMERA_PORT = 5051
 FRAME_MAPPING_FILE = "frame_mapping.json"
@@ -76,6 +77,8 @@ class PhotoReceiver(BaseHTTPRequestHandler):
             try:
                 content_length = int(self.headers.get('Content-Length', 0))
                 phone_id = self.headers.get('X-Phone-ID', 'unknown')
+                heading = self.headers.get('X-Camera-Heading')
+                accuracy = self.headers.get('X-Camera-Accuracy')
                 
                 if content_length > 0:
                     image_data = self.rfile.read(content_length)
@@ -95,7 +98,17 @@ class PhotoReceiver(BaseHTTPRequestHandler):
                     with open(filepath, "wb") as f:
                         f.write(image_data)
                     
-                    print(f"Updated {filename} from {phone_id}: {len(image_data)} bytes")
+                    # Save compass data if available
+                    if heading is not None:
+                        try:
+                            save_camera_direction(phone_id, float(heading), 
+                                                 float(accuracy) if accuracy else None)
+                            print(f"Updated {filename} from {phone_id}: {len(image_data)} bytes, heading: {heading}°")
+                        except ValueError:
+                            print(f"Updated {filename} from {phone_id}: {len(image_data)} bytes, invalid heading data")
+                    else:
+                        print(f"Updated {filename} from {phone_id}: {len(image_data)} bytes")
+                    
                     self.send_response(200)
                     self.end_headers()
                     self.wfile.write(f"Photo saved as {filename}".encode())
@@ -108,6 +121,7 @@ class PhotoReceiver(BaseHTTPRequestHandler):
                 self.end_headers()
         else:
             self.send_response(404)
+            self.end_headers()
             self.end_headers()
     
     def log_message(self, format, *args):
@@ -122,6 +136,35 @@ def run_camera_server():
         server.serve_forever()
     except Exception as e:
         print(f"Failed to start camera server: {e}")
+
+def save_camera_direction(phone_id, heading, accuracy=None):
+    """Save camera direction data for a phone"""
+    directions = {}
+    if os.path.exists(CAMERA_DIRECTIONS_FILE):
+        try:
+            with open(CAMERA_DIRECTIONS_FILE, 'r') as f:
+                directions = json.load(f)
+        except:
+            directions = {}
+    
+    directions[phone_id] = {
+        'heading': heading,
+        'accuracy': accuracy,
+        'timestamp': time.time()
+    }
+    
+    with open(CAMERA_DIRECTIONS_FILE, 'w') as f:
+        json.dump(directions, f)
+
+def load_camera_directions():
+    """Load all camera direction data"""
+    if os.path.exists(CAMERA_DIRECTIONS_FILE):
+        try:
+            with open(CAMERA_DIRECTIONS_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
 
 @app.route("/")
 def index():
@@ -394,6 +437,25 @@ def get_photo(phone_id):
             return jsonify({"error": f"Photo file frame{frame_num}.jpg not found for {phone_id}"}), 404
     
     return jsonify({"error": "No photo found for this phone"}), 404
+
+@app.route("/get_camera_direction/<phone_id>")
+def get_camera_direction(phone_id):
+    """Get the camera direction data for a specific phone"""
+    directions = load_camera_directions()
+    
+    if phone_id in directions:
+        direction_data = directions[phone_id]
+        # Check if data is recent (within last 30 seconds)
+        if time.time() - direction_data['timestamp'] < 30:
+            return jsonify({
+                'heading': direction_data['heading'],
+                'accuracy': direction_data.get('accuracy'),
+                'timestamp': direction_data['timestamp']
+            })
+        else:
+            return jsonify({"error": "Direction data too old"}), 404
+    
+    return jsonify({"error": "No direction data found for this phone"}), 404
 
 @app.route("/get_frame/<int:frame_num>")
 def get_frame(frame_num):

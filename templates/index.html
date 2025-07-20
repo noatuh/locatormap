@@ -263,7 +263,47 @@
       text-align: center;
     }
     
+    /* Camera direction indicator */
+    #cameraDirection {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 5px;
+      font-size: 11px;
+      color: #555;
+    }
+    
+    .direction-indicator {
+      display: inline-flex;
+      align-items: center;
+      background: #f0f8ff;
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      padding: 2px 6px;
+      margin: 0 2px;
+    }
+    
+    .direction-arrow {
+      display: inline-block;
+      margin-right: 3px;
+      font-weight: bold;
+      color: #007bff;
+    }
+    
     .camera-window-dragging {
+      pointer-events: none;
+    }
+
+    /* Phone direction arrows on map */
+    .phone-direction-arrow {
+      position: absolute;
+      width: 0;
+      height: 0;
+      border-left: 8px solid transparent;
+      border-right: 8px solid transparent;
+      border-bottom: 20px solid rgba(255, 100, 100, 0.8);
+      transform-origin: 50% 100%;
+      z-index: 1001;
       pointer-events: none;
     }
 
@@ -616,6 +656,12 @@
       </div>
       <div class="camera-controls">
         <button id="downloadImage">📥 Download Image</button>
+      </div>
+      <div id="cameraDirection">
+        <div class="direction-indicator">
+          <span class="direction-arrow">📍</span>
+          <span id="cameraDirectionText">Direction: Unknown</span>
+        </div>
       </div>
       <div class="camera-image-container">
         <img id="cameraWindowImage" alt="No camera feed">
@@ -1416,6 +1462,7 @@
       
       const img = document.getElementById('cameraWindowImage');
       const status = document.getElementById('cameraWindowStatus');
+      const directionText = document.getElementById('cameraDirectionText');
       
       // Add timestamp to prevent caching
       const timestamp = new Date().getTime();
@@ -1427,12 +1474,98 @@
         img.src = imageUrl;
         status.textContent = `${selectedCameraPhone} - Last updated: ${new Date().toLocaleTimeString()}`;
         status.style.color = '#666';
+        
+        // Try to get direction data (this would need server-side support)
+        fetchCameraDirection(selectedCameraPhone);
       };
       testImg.onerror = function() {
         status.textContent = `No camera feed from ${selectedCameraPhone}`;
         status.style.color = '#999';
+        directionText.textContent = 'Direction: Unknown';
       };
       testImg.src = imageUrl;
+    }
+    
+    function fetchCameraDirection(phoneId) {
+      // Fetch compass direction data from the phone's camera
+      // This works with the modified py.py script that captures sensor data
+      fetch(`/get_camera_direction/${phoneId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.heading !== undefined) {
+            updateDirectionDisplay(data.heading, data.accuracy);
+            updatePhoneDirectionArrow(phoneId, data.heading);
+          }
+        })
+        .catch(err => {
+          // Direction data not available (sensor not supported, data too old, etc.)
+          document.getElementById('cameraDirectionText').textContent = 'Direction: Unknown';
+        });
+    }
+    
+    function updateDirectionDisplay(heading, accuracy) {
+      const directionText = document.getElementById('cameraDirectionText');
+      const cardinal = getCardinalDirection(heading);
+      const arrow = getDirectionArrow(heading);
+      
+      let accuracyText = '';
+      if (accuracy !== undefined) {
+        accuracyText = ` (±${Math.round(accuracy)}°)`;
+      }
+      
+      directionText.innerHTML = `<span class="direction-arrow">${arrow}</span> ${cardinal} ${Math.round(heading)}°${accuracyText}`;
+    }
+    
+    function getCardinalDirection(heading) {
+      const directions = [
+        'N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
+        'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'
+      ];
+      const index = Math.round(heading / 22.5) % 16;
+      return directions[index];
+    }
+    
+    function getDirectionArrow(heading) {
+      // Return appropriate arrow emoji based on direction
+      if (heading >= 337.5 || heading < 22.5) return '⬆️'; // N
+      if (heading >= 22.5 && heading < 67.5) return '↗️'; // NE
+      if (heading >= 67.5 && heading < 112.5) return '➡️'; // E
+      if (heading >= 112.5 && heading < 157.5) return '↘️'; // SE
+      if (heading >= 157.5 && heading < 202.5) return '⬇️'; // S
+      if (heading >= 202.5 && heading < 247.5) return '↙️'; // SW
+      if (heading >= 247.5 && heading < 292.5) return '⬅️'; // W
+      if (heading >= 292.5 && heading < 337.5) return '↖️'; // NW
+      return '📍';
+    }
+    
+    function updatePhoneDirectionArrow(phoneId, heading) {
+      if (!phones[phoneId] || !phones[phoneId].marker) return;
+      
+      // Remove existing direction arrow if any
+      if (phones[phoneId].directionArrow) {
+        map.removeLayer(phones[phoneId].directionArrow);
+      }
+      
+      // Create direction arrow marker
+      const phonePosition = phones[phoneId].marker.getLatLng();
+      const arrow = L.marker(phonePosition, {
+        icon: L.divIcon({
+          className: 'phone-direction-arrow',
+          html: `<div style="
+            width: 0; height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 20px solid rgba(255, 100, 100, 0.8);
+            transform: rotate(${heading}deg);
+            transform-origin: 50% 100%;
+          "></div>`,
+          iconSize: [16, 20],
+          iconAnchor: [8, 20]
+        }),
+        zIndexOffset: 1000
+      }).addTo(map);
+      
+      phones[phoneId].directionArrow = arrow;
     }
 
     function rotateImageLeft() {
