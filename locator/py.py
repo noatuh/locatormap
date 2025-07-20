@@ -10,6 +10,7 @@ import select
 import tty
 import termios
 import threading
+import base64
 
 DEFAULT_SERVER_IP = "24.95.163.76:5050"
 CAMERA_PORT = 5051
@@ -39,105 +40,127 @@ def get_gps_coords():
         print("Error getting location:", e)
     return None, None
 
-def get_sensor_data():
-    """Get compass/orientation data from sensors - compatible with various Android devices"""
+# --- New Global State and Sensor Thread ---
+
+# Thread-safe lock for accessing sensor data
+sensor_data_lock = threading.Lock()
+
+# Global dictionary to hold the latest sensor readings and phone state
+latest_sensor_data = {
+    "accelerometer": None,
+    "magnetometer": None,
+    "heading": None,
+    "accuracy": None,
+    "is_stable": False,
+    "last_accel_raw": None,
+    "stable_since": 0
+}
+
+# Constants for stability detection
+STABILITY_THRESHOLD = 0.5  # Lower is more sensitive. Change in m/s^2
+STABILITY_DURATION = 0.5   # Must be stable for this many seconds
+
+def sensor_polling_thread():
+    """A dedicated thread to continuously poll sensors and determine stability."""
+    global latest_sensor_data
+    print("Sensor polling thread started")
+
+    while True:
+        try:
+            # Fetch raw sensor data without processing
+            raw_accel, raw_magnet = get_raw_sensor_data()
+            
+            is_currently_stable = False
+            
+            if raw_accel:
+                # --- Motion Detection Logic ---
+                with sensor_data_lock:
+                    last_accel = latest_sensor_data.get("last_accel_raw")
+                
+                if last_accel:
+                    # Calculate the magnitude of the change in acceleration
+                    delta = sum(abs(raw_accel[i] - last_accel[i]) for i in range(3))
+                    
+                    if delta < STABILITY_THRESHOLD:
+                        # Phone is currently stable
+                        with sensor_data_lock:
+                            if latest_sensor_data["stable_since"] == 0:
+                                latest_sensor_data["stable_since"] = time.time()
+                            
+                            # Check if it's been stable for long enough
+                            if (time.time() - latest_sensor_data["stable_since"]) > STABILITY_DURATION:
+                                is_currently_stable = True
+                    else:
+                        # Phone is moving
+                        with sensor_data_lock:
+                            latest_sensor_data["stable_since"] = 0
+                
+                with sensor_data_lock:
+                    latest_sensor_data["last_accel_raw"] = raw_accel
+            
+            # --- Update Global State ---
+            with sensor_data_lock:
+                latest_sensor_data["is_stable"] = is_currently_stable
+                
+                if raw_accel and raw_magnet:
+                    latest_sensor_data["accelerometer"] = raw_accel
+                    latest_sensor_data["magnetometer"] = raw_magnet
+                    
+                    # Calculate heading only if we have valid data
+                    if is_valid_sensor_data(raw_magnet, raw_accel):
+                        heading = calculate_compass_heading(raw_magnet, raw_accel)
+                        if heading is not None:
+                            latest_sensor_data["heading"] = heading
+                            latest_sensor_data["accuracy"] = 15 # Default accuracy
+            
+            # Adjust polling frequency
+            time.sleep(0.25) # Poll 4 times per second
+
+        except Exception as e:
+            print(f"Error in sensor thread: {e}")
+            time.sleep(1) # Wait a bit before retrying
+
+def get_raw_sensor_data():
+    """Gets raw accelerometer and magnetometer data without complex logic."""
     try:
-        # Try combined sensor call first
         result = subprocess.run(["termux-sensor", "-s", "magnetometer,accelerometer", "-n", "1"], 
                               capture_output=True, text=True, timeout=5)
         
-        magnetometer = None
-        accelerometer = None
-        
         if result.returncode == 0 and result.stdout.strip():
-            try:
-                print(f"Raw sensor data: {result.stdout}")  # Debug output
-                sensor_data = json.loads(result.stdout)
-                
-                # Handle different possible formats
-                if isinstance(sensor_data, dict):
-                    # Format: {"sensor_name": {"values": [x, y, z]}, ...}
-                    for sensor_name, sensor_info in sensor_data.items():
-                        if isinstance(sensor_info, dict) and "values" in sensor_info:
-                            sensor_lower = sensor_name.lower()
-                            
-                            # Check for magnetometer (various naming patterns)
-                            if any(keyword in sensor_lower for keyword in ['magnetometer', 'magnetic', 'compass']):
-                                magnetometer = sensor_info["values"]
-                                print(f"Found magnetometer: {sensor_name}")
-                                
-                            # Check for accelerometer (various naming patterns)
-                            elif any(keyword in sensor_lower for keyword in ['accelerometer', 'accel', 'acceleration']):
-                                accelerometer = sensor_info["values"]
-                                print(f"Found accelerometer: {sensor_name}")
-                        
-                elif isinstance(sensor_data, list):
-                    # Format: [{"sensor": "magnetometer", "values": [x, y, z]}, ...]
-                    for sensor in sensor_data:
-                        if isinstance(sensor, dict):
-                            sensor_name = sensor.get("sensor", "").lower()
-                            
-                            # Flexible magnetometer detection
-                            if any(keyword in sensor_name for keyword in ['magnetometer', 'magnetic', 'compass']):
-                                magnetometer = sensor.get("values", [0, 0, 0])
-                                
-                            # Flexible accelerometer detection
-                            elif any(keyword in sensor_name for keyword in ['accelerometer', 'accel', 'acceleration']):
-                                accelerometer = sensor.get("values", [0, 0, 0])
-                
-            except json.JSONDecodeError as e:
-                print(f"Error parsing sensor JSON: {e}")
-                print(f"Raw output: {result.stdout}")
-        
-        # Fallback: try individual sensor calls if combined didn't work
-        if not magnetometer or not accelerometer:
-            print("Trying individual sensor calls...")
-            
-            if not magnetometer:
-                # Try different magnetometer command variations
-                for mag_cmd in ["magnetometer", "magnetic_field", "compass"]:
-                    try:
-                        mag_result = subprocess.run(["termux-sensor", "-s", mag_cmd, "-n", "1"], 
-                                                  capture_output=True, text=True, timeout=3)
-                        if mag_result.returncode == 0 and mag_result.stdout.strip():
-                            mag_data = json.loads(mag_result.stdout)
-                            magnetometer = extract_sensor_values(mag_data, ['magnetometer', 'magnetic', 'compass'])
-                            if magnetometer:
-                                print(f"Found magnetometer via '{mag_cmd}' command")
-                                break
-                    except:
-                        continue
-            
-            if not accelerometer:
-                # Try different accelerometer command variations
-                for acc_cmd in ["accelerometer", "accel", "acceleration"]:
-                    try:
-                        acc_result = subprocess.run(["termux-sensor", "-s", acc_cmd, "-n", "1"], 
-                                                  capture_output=True, text=True, timeout=3)
-                        if acc_result.returncode == 0 and acc_result.stdout.strip():
-                            acc_data = json.loads(acc_result.stdout)
-                            accelerometer = extract_sensor_values(acc_data, ['accelerometer', 'accel', 'acceleration'])
-                            if accelerometer:
-                                print(f"Found accelerometer via '{acc_cmd}' command")
-                                break
-                    except:
-                        continue
-        
-        if magnetometer and accelerometer:
-            # Validate sensor data (check for reasonable values)
-            if is_valid_sensor_data(magnetometer, accelerometer):
-                print(f"Magnetometer: {magnetometer}, Accelerometer: {accelerometer}")
-                # Calculate compass heading
-                heading = calculate_compass_heading(magnetometer, accelerometer)
-                if heading is not None:
-                    return heading, 15  # Return heading and estimated accuracy (±15 degrees)
-            else:
-                print("Warning: Sensor data appears invalid, skipping compass calculation")
-        else:
-            print(f"Missing sensor data - magnetometer: {magnetometer}, accelerometer: {accelerometer}")
+            sensor_data = json.loads(result.stdout)
+            magnetometer = None
+            accelerometer = None
+
+            if isinstance(sensor_data, dict):
+                for name, info in sensor_data.items():
+                    if isinstance(info, dict) and "values" in info:
+                        if 'magnetometer' in name.lower():
+                            magnetometer = info["values"]
+                        elif 'accelerometer' in name.lower():
+                            accelerometer = info["values"]
+            return accelerometer, magnetometer
             
     except Exception as e:
-        print(f"Error getting sensor data: {e}")
+        print(f"Could not get raw sensor data: {e}")
+        
+    return None, None
+
+def get_sensor_data():
+    """Get compass/orientation data from the sensor thread's cache."""
+    try:
+        # Use cached sensor data for faster access
+        with sensor_data_lock:
+            heading = latest_sensor_data.get("heading")
+            accuracy = latest_sensor_data.get("accuracy")
+        
+        if heading is not None:
+            return heading, accuracy
+        else:
+            # This is expected if the sensor thread hasn't produced a heading yet
+            pass
+            
+    except Exception as e:
+        print(f"Error getting sensor data from cache: {e}")
     return None, None
 
 def extract_sensor_values(sensor_data, keywords):
@@ -260,43 +283,151 @@ def warm_up_camera():
         print(f"Error warming up camera: {e}")
         return False
 
+def release_camera():
+    """Force release camera resources to prevent conflicts"""
+    try:
+        # Kill any existing camera processes
+        subprocess.run(["pkill", "-f", "termux-camera"], capture_output=True, timeout=3)
+        time.sleep(0.2)  # Short delay to let processes die
+    except:
+        pass
+
+def advanced_camera_capture(filename, retries=2):
+    """Enhanced camera capture with session management"""
+    for attempt in range(retries + 1):
+        try:
+            if attempt > 0:
+                print(f"Camera capture retry {attempt}/{retries}")
+                # Release any stuck camera processes
+                release_camera()
+                time.sleep(1.0)  # Longer delay between retries
+            
+            # Use different camera parameters for reliability
+            camera_args = [
+                "termux-camera-photo",
+                "-c", "0",  # Back camera
+                filename
+            ]
+            
+            # Add autofocus if device supports it (helps with black screens)
+            result = subprocess.run(camera_args, 
+                                  capture_output=True, 
+                                  text=True, 
+                                  timeout=20)  # Longer timeout for difficult captures
+            
+            if result.returncode == 0:
+                # Verify capture was successful
+                if os.path.exists(filename):
+                    file_size = os.path.getsize(filename)
+                    if file_size > 5000:  # Require at least 5KB for valid image
+                        print(f"Camera capture successful on attempt {attempt + 1} ({file_size} bytes)")
+                        return True
+                    else:
+                        print(f"Captured file too small ({file_size} bytes), retrying...")
+                        if os.path.exists(filename):
+                            os.remove(filename)
+                else:
+                    print("No file created, retrying...")
+            else:
+                print(f"Camera returned error code {result.returncode}: {result.stderr}")
+                
+        except subprocess.TimeoutExpired:
+            print(f"Camera capture timeout on attempt {attempt + 1}")
+            # Kill the hung process
+            try:
+                subprocess.run(["pkill", "-f", "termux-camera"], timeout=2)
+            except:
+                pass
+        except Exception as e:
+            print(f"Camera capture error on attempt {attempt + 1}: {e}")
+    
+    return False
+
+def send_photo_json(server_ip, phone_id, photo_data, heading=None, accuracy=None):
+    """Alternative transmission method using JSON encoding"""
+    try:
+        # Encode photo as base64
+        photo_b64 = base64.b64encode(photo_data).decode('utf-8')
+        
+        # Prepare JSON payload
+        payload = {
+            "phone_id": phone_id,
+            "photo_data": photo_b64,
+            "timestamp": int(time.time()),
+            "file_size": len(photo_data)
+        }
+        
+        # Add compass data if available
+        if heading is not None:
+            payload["heading"] = heading
+            payload["accuracy"] = accuracy
+        
+        # Send as JSON
+        response = requests.post(f"http://{server_ip}:{CAMERA_PORT}/upload_photo_json", 
+                               json=payload,
+                               headers={"Content-Type": "application/json"},
+                               timeout=20)
+        
+        if response.status_code == 200:
+            print(f"✓ Photo uploaded via JSON ({len(photo_data)} bytes)")
+            return True
+        else:
+            print(f"✗ JSON upload failed with status {response.status_code}")
+            return False
+            
+    except Exception as e:
+        print(f"JSON upload error: {e}")
+        return False
+
+def send_photo_binary(server_ip, phone_id, photo_data, heading=None, accuracy=None):
+    """Original binary transmission method"""
+    try:
+        # Prepare headers with enhanced metadata
+        headers = {
+            "Content-Type": "application/octet-stream",
+            "X-Phone-ID": phone_id,
+            "X-Timestamp": str(int(time.time())),
+            "X-File-Size": str(len(photo_data))
+        }
+        
+        # Add compass data to headers if available
+        if heading is not None:
+            headers["X-Camera-Heading"] = str(heading)
+            headers["X-Camera-Accuracy"] = str(accuracy)
+        
+        # Send with binary data
+        response = requests.post(f"http://{server_ip}:{CAMERA_PORT}/upload_photo", 
+                               data=photo_data,
+                               headers=headers,
+                               timeout=15,
+                               stream=False)
+        
+        if response.status_code == 200:
+            print(f"✓ Photo uploaded via binary ({len(photo_data)} bytes)")
+            return True
+        else:
+            print(f"✗ Binary upload failed with status {response.status_code}")
+            return False
+            
+    except Exception as e:
+        print(f"Binary upload error: {e}")
+        return False
+
 def capture_and_send_photo(server_ip, phone_id):
     """Capture photo with termux and send to server along with compass data"""
     filename = f"cam_{phone_id}.jpg"
     try:
         print("Capturing photo...")
         
-        # Enhanced camera capture with better parameters
-        # -c 0: Use back camera (more reliable than front)
-        # Add small delay before capture to allow camera to stabilize
-        time.sleep(0.5)
+        # Enhanced camera capture with session management
+        time.sleep(0.3)  # Brief stabilization delay
         
-        # Try capture with enhanced error handling
-        result = subprocess.run([
-            "termux-camera-photo", 
-            "-c", "0",  # Back camera
-            filename
-        ], capture_output=True, text=True, timeout=15)  # Increased timeout
-        
-        # Check for capture errors
-        if result.returncode != 0:
-            print(f"Camera capture failed with return code {result.returncode}")
-            if result.stderr:
-                print(f"Camera error: {result.stderr}")
-            return False
-        
-        # Verify file was actually created and has content
-        if not os.path.exists(filename):
-            print("Photo file was not created")
+        # Use advanced capture method with retries
+        if not advanced_camera_capture(filename):
+            print("All camera capture attempts failed")
             return False
             
-        # Check if file has reasonable size (not empty/corrupt)
-        file_size = os.path.getsize(filename)
-        if file_size < 1000:  # Less than 1KB suggests corruption
-            print(f"Photo file too small ({file_size} bytes), likely corrupt")
-            return False
-            
-        print(f"Photo captured successfully ({file_size} bytes)")
+        print(f"Photo captured successfully")
         
         try:
             # Get compass heading
@@ -305,27 +436,24 @@ def capture_and_send_photo(server_ip, phone_id):
             with open(filename, "rb") as f:
                 photo_data = f.read()
             
-            # Prepare headers
-            headers = {
-                "Content-Type": "application/octet-stream",
-                "X-Phone-ID": phone_id
-            }
+            # Try both transmission methods for reliability
+            success = False
             
-            # Add compass data to headers if available
-            if heading is not None:
-                headers["X-Camera-Heading"] = str(heading)
-                headers["X-Camera-Accuracy"] = str(accuracy)
+            # First try binary method (faster)
+            if send_photo_binary(server_ip, phone_id, photo_data, heading, accuracy):
+                success = True
+            # If binary fails, try JSON method (more reliable)
+            elif send_photo_json(server_ip, phone_id, photo_data, heading, accuracy):
+                success = True
+                print("Used JSON fallback transmission")
+            
+            if success and heading is not None:
                 print(f"Compass heading: {heading:.1f}° (±{accuracy}°)")
                 
-            # Send photo to camera endpoint
-            response = requests.post(f"http://{server_ip}:{CAMERA_PORT}/upload_photo", 
-                                   data=photo_data,
-                                   headers=headers,
-                                   timeout=10)
-            print(f"Sent photo: {response.status_code}")
-            return True
+            return success
+                
         except Exception as e:
-            print(f"Failed to send photo: {e}")
+            print(f"Failed to process photo: {e}")
             return False
         
     except Exception as e:
@@ -335,6 +463,49 @@ def capture_and_send_photo(server_ip, phone_id):
         # Always clean up the file
         if os.path.exists(filename):
             os.remove(filename)
+
+# Thread-safe lock for camera state
+camera_active_lock = threading.Lock()
+
+def camera_capture_thread(server_ip, phone_id):
+    """A dedicated thread to capture photos when the phone is stable."""
+    global camera_active
+    last_capture_time = 0
+    capture_interval = 8  # Minimum seconds between captures
+
+    print("Camera capture thread started")
+
+    while True:
+        try:
+            with camera_active_lock:
+                is_active = camera_active
+
+            if not is_active:
+                time.sleep(1)
+                continue
+
+            current_time = time.time()
+            is_stable = False
+            with sensor_data_lock:
+                is_stable = latest_sensor_data.get("is_stable", False)
+
+            # Check for stability and time interval
+            if is_stable and (current_time - last_capture_time) > capture_interval:
+                print("Phone is stable, attempting to capture photo...")
+                success = capture_and_send_photo(server_ip, phone_id)
+                if success:
+                    print("✓ Photo capture and send successful.")
+                    last_capture_time = time.time()
+                else:
+                    print("✗ Photo capture failed. Will retry when stable again.")
+                    # Optional: add a small delay after a failure to prevent rapid retries
+                    time.sleep(2)
+            
+            time.sleep(0.5) # Check for stability twice a second
+
+        except Exception as e:
+            print(f"Error in camera thread: {e}")
+            time.sleep(2) # Wait a bit before retrying
 
 def key_pressed():
     """Check if a key has been pressed (non-blocking)"""
@@ -385,7 +556,6 @@ if __name__ == "__main__":
                 sensor_test = subprocess.run(["termux-sensor", "-l"], capture_output=True, text=True, timeout=5)
                 if sensor_test.returncode == 0:
                     available_sensors = sensor_test.stdout.lower()
-                    print(f"Available sensors: {sensor_test.stdout}")
                     
                     # Check for magnetometer variants
                     has_magnetometer = any(keyword in available_sensors for keyword in 
@@ -399,7 +569,11 @@ if __name__ == "__main__":
                         print("✓ Compass sensors available!")
                         # Test actual sensor reading
                         print("Testing sensor data retrieval...")
-                        test_heading, test_accuracy = get_sensor_data()
+                        # We need to give the sensor thread a moment to start and get a reading
+                        time.sleep(2) 
+                        with sensor_data_lock:
+                            test_heading = latest_sensor_data.get("heading")
+
                         if test_heading is not None:
                             print(f"✓ Compass test successful! Current heading: {test_heading:.1f}°")
                         else:
@@ -420,75 +594,58 @@ if __name__ == "__main__":
     print(f"\nStarting GPS location sender")
     print(f"Server URL: {SERVER_URL}")
     print(f"Phone ID: {PHONE_ID}")
-    print(f"Camera enabled: {enable_camera}")
-    if enable_camera:
-        print("\n📷 CAMERA OPTIMIZATION TIPS:")
-        print("• Keep phone steady for 1-2 seconds after movement")
-        print("• Avoid rapid movement or shaking during capture")
-        print("• Ensure good lighting conditions")
-        print("• If camera goes black repeatedly, toggle with 'c' key")
-        print("• System will automatically skip photos after 3 consecutive failures")
-        print("• Photos taken every 6 seconds when active")
-    print("Press 'e' to exit, 'c' to toggle camera")
+    
+    # Global flag for camera state
+    camera_active = enable_camera
+
+    if camera_active:
+        print("\n📷 STABILITY-BASED CAMERA SYSTEM:")
+        print("• Camera captures photos ONLY when the phone is held steady.")
+        print("• Decoupled sensor and camera threads for reliability.")
+        print("• Eliminates black screens caused by motion/resource conflicts.")
+        print("\n🎮 CONTROLS:")
+        print("• 'c' = Toggle camera on/off")
+        print("• 'e' = Exit application")
+    else:
+        print("Press 'e' to exit")
     print("----------------------------------")
     
-    # Prepare terminal for key detection if camera enabled
-    if enable_camera:
-        fd = sys.stdin.fileno()
-        old_settings = termios.tcgetattr(fd)
-        tty.setcbreak(fd)
+    # Prepare terminal for key detection
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    tty.setcbreak(fd)
     
-    camera_active = enable_camera
-    last_photo_time = 0
-    photo_interval = 6  # Increased to 6 seconds between photos
-    consecutive_failures = 0
-    max_failures = 3
+    # Start the background threads
+    sensor_thread = threading.Thread(target=sensor_polling_thread, daemon=True)
+    sensor_thread.start()
+
+    if camera_active:
+        camera_thread = threading.Thread(target=camera_capture_thread, args=(server_ip, PHONE_ID), daemon=True)
+        camera_thread.start()
     
     try:
         while True:
-            # Always send location
+            # Main thread only sends location and handles user input
             send_location(SERVER_URL, PHONE_ID)
             
-            # Handle camera if enabled
-            current_time = time.time()
-            if camera_active and (current_time - last_photo_time) >= photo_interval:
-                print(f"Attempting photo capture (consecutive failures: {consecutive_failures})")
-                
-                # Skip photo if too many consecutive failures
-                if consecutive_failures >= max_failures:
-                    print(f"Skipping photo due to {consecutive_failures} consecutive failures")
-                    # Wait longer before trying again
-                    last_photo_time = current_time + 10  # Extra 10 second delay
-                    consecutive_failures = 0  # Reset counter
-                else:
-                    # Try to capture photo
-                    if capture_and_send_photo(server_ip, PHONE_ID):
-                        last_photo_time = current_time
-                        consecutive_failures = 0  # Reset failure counter on success
-                        print("✓ Photo capture successful")
-                    else:
-                        consecutive_failures += 1
-                        last_photo_time = current_time  # Still update time to avoid rapid retries
-                        print(f"✗ Photo capture failed (attempt {consecutive_failures}/{max_failures})")
-            
             # Check for key presses
-            if enable_camera and key_pressed():
+            if key_pressed():
                 ch = sys.stdin.read(1).lower()
                 if ch == 'e':
                     print("Exit key pressed. Exiting...")
                     break
-                elif ch == 'c':
-                    camera_active = not camera_active
-                    consecutive_failures = 0  # Reset failures when toggling camera
-                    print(f"Camera {'activated' if camera_active else 'deactivated'}")
+                elif ch == 'c' and enable_camera:
+                    with camera_active_lock:
+                        camera_active = not camera_active
+                    status = "activated" if camera_active else "deactivated"
+                    print(f"\nCamera has been {status}.")
             
-            time.sleep(1)  # Main loop delay
+            time.sleep(2)  # Location update interval
             
     except KeyboardInterrupt:
         print("\nGPS location sender stopped")
     finally:
-        if enable_camera:
-            # Restore terminal settings
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-            print("Terminal input restored.")
+        # Restore terminal settings
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        print("Terminal input restored.")
         sys.exit(0)

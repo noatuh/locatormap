@@ -119,9 +119,70 @@ class PhotoReceiver(BaseHTTPRequestHandler):
                 print(f"Error receiving photo: {e}")
                 self.send_response(500)
                 self.end_headers()
+        
+        elif self.path == "/upload_photo_json":
+            # JSON-based photo upload (alternative method)
+            try:
+                content_length = int(self.headers.get('Content-Length', 0))
+                if content_length > 0:
+                    json_data = self.rfile.read(content_length).decode('utf-8')
+                    data = json.loads(json_data)
+                    
+                    phone_id = data.get('phone_id', 'unknown')
+                    photo_b64 = data.get('photo_data', '')
+                    heading = data.get('heading')
+                    accuracy = data.get('accuracy')
+                    
+                    if photo_b64:
+                        # Decode base64 photo
+                        import base64
+                        image_data = base64.b64decode(photo_b64)
+                        
+                        # Get frame number for this phone
+                        frame_num = get_frame_number(phone_id)
+                        if frame_num is None:
+                            self.send_response(429)
+                            self.end_headers()
+                            self.wfile.write(b'{"error": "Maximum 5 phones supported"}')
+                            return
+                        
+                        # Save as frameX.jpg
+                        filename = f"frame{frame_num}.jpg"
+                        filepath = os.path.join(PHOTOS_DIR, filename)
+                        
+                        with open(filepath, "wb") as f:
+                            f.write(image_data)
+                        
+                        # Save compass data if available
+                        if heading is not None:
+                            try:
+                                save_camera_direction(phone_id, float(heading), 
+                                                     float(accuracy) if accuracy else None)
+                                print(f"JSON: Updated {filename} from {phone_id}: {len(image_data)} bytes, heading: {heading}°")
+                            except ValueError:
+                                print(f"JSON: Updated {filename} from {phone_id}: {len(image_data)} bytes, invalid heading")
+                        else:
+                            print(f"JSON: Updated {filename} from {phone_id}: {len(image_data)} bytes")
+                        
+                        self.send_response(200)
+                        self.end_headers()
+                        self.wfile.write(f'{{"status": "success", "filename": "{filename}"}}'.encode())
+                    else:
+                        self.send_response(400)
+                        self.end_headers()
+                        self.wfile.write(b'{"error": "No photo data"}')
+                else:
+                    self.send_response(400)
+                    self.end_headers()
+                    self.wfile.write(b'{"error": "No content"}')
+            except Exception as e:
+                print(f"Error receiving JSON photo: {e}")
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(f'{{"error": "{str(e)}"}}'.encode())
+        
         else:
             self.send_response(404)
-            self.end_headers()
             self.end_headers()
     
     def log_message(self, format, *args):
