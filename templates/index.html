@@ -437,8 +437,8 @@
     </select>
     <button id="switchView">Switch to Satellite</button>
     <button id="toggleGrid">Show Grid</button>
-    <button id="toggleLabels" onclick="togglePhoneLabels()">Hide Phone Labels</button>
-    <button id="toggleDirectionArrows" onclick="toggleDirectionArrows()">Hide Direction Arrows</button>
+    <button id="toggleLabels">Hide Phone Labels</button>
+    <button id="toggleDirectionArrows">Hide Direction Arrows</button>
     
     <!-- Add measurement controls after drawing controls -->
     <div style="border-top: 1px solid #ccc; margin-top: 10px; padding-top: 10px;">
@@ -1525,6 +1525,10 @@
     document.getElementById('toggleNotes').addEventListener('click', () => {
       document.getElementById('notesPanel').classList.toggle('hidden');
     });
+    
+    // Add event listeners for phone label and direction arrow toggle buttons
+    document.getElementById("toggleLabels").addEventListener('click', togglePhoneLabels);
+    document.getElementById("toggleDirectionArrows").addEventListener('click', toggleDirectionArrows);
     
     } // End of initializeMap function
   </script>
