@@ -162,150 +162,6 @@
       font-size: 12px;
       white-space: pre-wrap;
     }
-    
-    /* Camera window styles */
-    #cameraWindow {
-      position: fixed;
-      top: 50px;
-      left: 50px;
-      width: 320px;
-      height: 280px;
-      background: white;
-      border: 2px solid #333;
-      border-radius: 8px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-      z-index: 2000;
-      display: none;
-      resize: both;
-      overflow: hidden;
-      min-width: 250px;
-      min-height: 200px;
-    }
-    
-    #cameraWindowHeader {
-      background: #333;
-      color: white;
-      padding: 8px 12px;
-      cursor: move;
-      user-select: none;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      font-size: 14px;
-      font-weight: bold;
-    }
-    
-    #cameraWindowContent {
-      padding: 12px;
-      height: calc(100% - 44px);
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-    }
-    
-    .camera-image-container {
-      flex: 1;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 0;
-      overflow: hidden;
-      margin-bottom: 8px;
-      max-width: 100%;
-      max-height: 100%;
-    }
-    
-    #cameraWindowSelector {
-      width: 100%;
-      margin-bottom: 10px;
-      padding: 4px;
-    }
-    
-    #cameraWindowImage {
-      max-width: 100%;
-      max-height: 100%;
-      width: auto;
-      height: auto;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      display: block;
-      margin: 0;
-      transform: rotate(-90deg); /* Default landscape orientation */
-      transition: transform 0.3s ease;
-      object-fit: contain;
-      box-sizing: border-box;
-    }
-    
-    .camera-controls {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 10px;
-      gap: 5px;
-    }
-    
-    .camera-controls button {
-      flex: 1;
-      padding: 4px 8px;
-      font-size: 11px;
-      border: 1px solid #ccc;
-      background: #f5f5f5;
-      cursor: pointer;
-      border-radius: 3px;
-    }
-    
-    .camera-controls button:hover {
-      background: #e5e5e5;
-    }
-    
-    #cameraWindowStatus {
-      font-size: 12px;
-      color: #666;
-      text-align: center;
-    }
-    
-    /* Camera direction indicator */
-    #cameraDirection {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 5px;
-      font-size: 11px;
-      color: #555;
-    }
-    
-    .direction-indicator {
-      display: inline-flex;
-      align-items: center;
-      background: #f0f8ff;
-      border: 1px solid #ddd;
-      border-radius: 3px;
-      padding: 2px 6px;
-      margin: 0 2px;
-    }
-    
-    .direction-arrow {
-      display: inline-block;
-      margin-right: 3px;
-      font-weight: bold;
-      color: #007bff;
-    }
-    
-    .camera-window-dragging {
-      pointer-events: none;
-    }
-
-    /* Phone direction arrows on map */
-    .phone-direction-arrow {
-      position: absolute;
-      width: 0;
-      height: 0;
-      border-left: 8px solid transparent;
-      border-right: 8px solid transparent;
-      border-bottom: 20px solid rgba(255, 100, 100, 0.8);
-      transform-origin: 50% 100%;
-      z-index: 1001;
-      pointer-events: none;
-    }
 
     /* Notes styles */
     #notesList {
@@ -582,6 +438,7 @@
     <button id="switchView">Switch to Satellite</button>
     <button id="toggleGrid">Show Grid</button>
     <button id="toggleLabels" onclick="togglePhoneLabels()">Hide Phone Labels</button>
+    <button id="toggleDirectionArrows" onclick="toggleDirectionArrows()">Hide Direction Arrows</button>
     
     <!-- Add measurement controls after drawing controls -->
     <div style="border-top: 1px solid #ccc; margin-top: 10px; padding-top: 10px;">
@@ -622,12 +479,6 @@
       <div id="phoneEntries"></div>
       <button id="clearAllPhones">Clear All Phones</button>
     </div>
-
-    <!-- Camera controls -->
-    <div style="border-top: 1px solid #ccc; margin-top: 10px; padding-top: 10px;">
-      <h4>Camera Feed</h4>
-      <button id="toggleCameraWindow">Open Camera Window</button>
-    </div>
   </div>
 
   <!-- Note input dialog -->
@@ -637,36 +488,6 @@
     <div class="note-dialog-buttons">
       <button id="cancelNoteBtn">Cancel</button>
       <button id="saveNoteBtn">Post Note</button>
-    </div>
-  </div>
-
-  <!-- Draggable Camera Window -->
-  <div id="cameraWindow">
-    <div id="cameraWindowHeader">
-      <span>Camera Feed</span>
-    </div>
-    <div id="cameraWindowContent">
-      <select id="cameraWindowSelector">
-        <option value="">Select phone...</option>
-      </select>
-      <div class="camera-controls">
-        <button id="rotateLeft">⟲ Left</button>
-        <button id="resetRotation">Reset</button>
-        <button id="rotateRight">Right ⟳</button>
-      </div>
-      <div class="camera-controls">
-        <button id="downloadImage">📥 Download Image</button>
-      </div>
-      <div id="cameraDirection">
-        <div class="direction-indicator">
-          <span class="direction-arrow">📍</span>
-          <span id="cameraDirectionText">Direction: Unknown</span>
-        </div>
-      </div>
-      <div class="camera-image-container">
-        <img id="cameraWindowImage" alt="No camera feed">
-      </div>
-      <div id="cameraWindowStatus">No camera selected</div>
     </div>
   </div>
 
@@ -854,30 +675,116 @@
           Object.keys(data).forEach(id => {
             const lat = data[id].lat;
             const lng = data[id].lng;
+            const heading = data[id].heading;
+            const alt = data[id].alt;
             if (typeof lat !== 'number' || typeof lng !== 'number') return;
             const latlng = [lat, lng];
 
             if (phones[id] && phones[id].marker) {
+              // Update existing phone position
               phones[id].marker.setLatLng(latlng);
               phones[id].label.setLatLng(latlng);
+              phones[id].alt = alt; // Store altitude
+
+              // Only update heading if a new valid one is received
+              if (typeof heading === 'number') {
+                phones[id].heading = heading; 
+              }
+              
+              // Update or create direction arrow if we have a heading stored
+              if (typeof phones[id].heading === 'number') {
+                if (phones[id].directionArrow) {
+                  // Update existing arrow: move it and only rotate if new heading is available
+                  phones[id].directionArrow.setLatLng(latlng);
+                  if (typeof heading === 'number') {
+                    phones[id].directionArrow.setIcon(createDirectionArrowIcon(heading));
+                  }
+                } else {
+                  // Create new direction arrow if one doesn't exist
+                  phones[id].directionArrow = createDirectionArrow(latlng, phones[id].heading);
+                }
+              }
+              // If no heading is received and no arrow exists, do nothing.
+              
             } else {
-              phones[id] = {};
+              // Create new phone
+              phones[id] = { alt: alt }; // Initialize phone object with altitude
+              if (typeof heading === 'number') {
+                phones[id].heading = heading;
+              }
+              
               phones[id].marker = L.marker(latlng, {
                 icon: L.icon({
                   iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
                   iconSize: [32, 32], iconAnchor: [16, 32]
                 })
               }).addTo(map);
+              
               phones[id].label = L.marker(latlng, {
                 icon: L.divIcon({
                   className: 'phone-label', html: id, iconAnchor: [-5, -10]
                 })
               }).addTo(map);
+              
+              // Create direction arrow if heading data is available
+              if (typeof phones[id].heading === 'number') {
+                phones[id].directionArrow = createDirectionArrow(latlng, phones[id].heading);
+              }
             }
           });
+
+          // Remove markers for phones that are no longer in the data
+          Object.keys(phones).forEach(id => {
+            if (!data[id]) {
+              if (phones[id].marker) map.removeLayer(phones[id].marker);
+              if (phones[id].label) map.removeLayer(phones[id].label);
+              if (phones[id].directionArrow) map.removeLayer(phones[id].directionArrow);
+              delete phones[id];
+            }
+          });
+
           updatePhoneList();
         })
         .catch(err => console.error("Failed to load phones:", err));
+    }
+
+    function createDirectionArrowIcon(heading) {
+      return L.divIcon({
+        className: 'direction-arrow',
+        html: `<div style="
+          width: 50px; 
+          height: 50px; 
+          position: relative;
+          transform: rotate(${heading}deg);
+          pointer-events: none;
+        ">
+          <div style="
+            position: absolute;
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 24px solid #ff4444;
+            filter: drop-shadow(0 0 3px rgba(0,0,0,0.5));
+          "></div>
+        </div>`,
+        iconSize: [50, 50],
+        iconAnchor: [25, 25]
+      });
+    }
+
+    function createDirectionArrow(latlng, heading) {
+      const arrow = L.marker(latlng, {
+        icon: createDirectionArrowIcon(heading)
+      }).addTo(map);
+      
+      // Set initial opacity based on current visibility setting
+      arrow.setOpacity(directionArrowsVisible ? 1 : 0);
+      
+      return arrow;
     }
 
     function updatePhoneList() {
@@ -891,16 +798,26 @@
           const entry = document.createElement('div');
           entry.className = 'phone-entry';
           const text = document.createElement('span');
-          text.textContent = `${id}`;
+          let displayText = `${id}`;
+          if (typeof phones[id].heading === 'number') {
+            const heading = Math.round(phones[id].heading);
+            const cardinalDir = getCardinalDirection(heading);
+            displayText += ` - ${cardinalDir} (${heading}°)`;
+          }
+          if (typeof phones[id].alt === 'number') {
+            displayText += ` | Alt: ${phones[id].alt.toFixed(1)}m`;
+          }
+          text.textContent = displayText;
           entry.appendChild(text);
           phoneEntries.appendChild(entry);
         });
       }
-      
-      // Update camera phone selector if camera window is open
-      if (cameraWindowOpen) {
-        updateCameraPhoneSelector();
-      }
+    }
+
+    function getCardinalDirection(heading) {
+      const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+      const index = Math.round(heading / 45) % 8;
+      return directions[index];
     }
 
     let phoneLabelsVisible = true;
@@ -916,12 +833,26 @@
         phoneLabelsVisible ? "Hide Phone Labels" : "Show Phone Labels";
     }
 
+    let directionArrowsVisible = true;
+
+    function toggleDirectionArrows() {
+      directionArrowsVisible = !directionArrowsVisible;
+      Object.keys(phones).forEach(id => {
+        if (phones[id].directionArrow) {
+          phones[id].directionArrow.setOpacity(directionArrowsVisible ? 1 : 0);
+        }
+      });
+      document.getElementById("toggleDirectionArrows").innerText =
+        directionArrowsVisible ? "Hide Direction Arrows" : "Show Direction Arrows";
+    }
+
     function clearAllPhones() {
       if (confirm("Are you sure you want to clear all tracked phones? This cannot be undone.")) {
         // Clear phones from map
         Object.keys(phones).forEach(id => {
           if (phones[id].marker) map.removeLayer(phones[id].marker);
           if (phones[id].label) map.removeLayer(phones[id].label);
+          if (phones[id].directionArrow) map.removeLayer(phones[id].directionArrow);
         });
         
         // Clear phones object
@@ -1402,346 +1333,6 @@
     });
     
     document.getElementById("clearMeasurements").addEventListener('click', clearAllMeasurements);
-
-    // Draggable Camera Window functionality
-    let cameraWindowOpen = false;
-    let selectedCameraPhone = '';
-    let cameraUpdateInterval = null;
-    let isDragging = false;
-    let dragOffset = { x: 0, y: 0 };
-    let currentRotation = -90; // Start with landscape orientation (portrait phone rotated left)
-
-    function toggleCameraWindow() {
-      const cameraWindow = document.getElementById('cameraWindow');
-      const toggleButton = document.getElementById('toggleCameraWindow');
-      
-      if (cameraWindowOpen) {
-        // Close the camera window
-        cameraWindow.style.display = 'none';
-        cameraWindowOpen = false;
-        toggleButton.textContent = 'Open Camera Window';
-        
-        if (cameraUpdateInterval) {
-          clearInterval(cameraUpdateInterval);
-          cameraUpdateInterval = null;
-        }
-        // Also clear the image src to free up memory
-        const img = document.getElementById('cameraWindowImage');
-        img.src = '';
-        const status = document.getElementById('cameraWindowStatus');
-        status.textContent = 'Camera window closed';
-        status.style.color = '#666';
-      } else {
-        // Open the camera window
-        cameraWindow.style.display = 'block';
-        cameraWindowOpen = true;
-        toggleButton.textContent = 'Close Camera Window';
-        updateCameraPhoneSelector();
-      }
-    }
-
-    function updateCameraPhoneSelector() {
-      const selector = document.getElementById('cameraWindowSelector');
-      const currentPhones = Object.keys(phones);
-      
-      // Clear and repopulate selector
-      selector.innerHTML = '<option value="">Select phone...</option>';
-      currentPhones.forEach(phoneId => {
-        const option = document.createElement('option');
-        option.value = phoneId;
-        option.textContent = phoneId;
-        if (phoneId === selectedCameraPhone) {
-          option.selected = true;
-        }
-        selector.appendChild(option);
-      });
-    }
-
-    function updateCameraWindowFeed() {
-      if (!selectedCameraPhone) return;
-      
-      const img = document.getElementById('cameraWindowImage');
-      const status = document.getElementById('cameraWindowStatus');
-      const directionText = document.getElementById('cameraDirectionText');
-      
-      // Add timestamp to prevent caching
-      const timestamp = new Date().getTime();
-      const imageUrl = `/get_photo/${selectedCameraPhone}?t=${timestamp}`;
-      
-      // Create a new image to test if it loads
-      const testImg = new Image();
-      testImg.onload = function() {
-        img.src = imageUrl;
-        status.textContent = `${selectedCameraPhone} - Last updated: ${new Date().toLocaleTimeString()}`;
-        status.style.color = '#666';
-        
-        // Try to get direction data (this would need server-side support)
-        fetchCameraDirection(selectedCameraPhone);
-      };
-      testImg.onerror = function() {
-        status.textContent = `No camera feed from ${selectedCameraPhone}`;
-        status.style.color = '#999';
-        directionText.textContent = 'Direction: Unknown';
-      };
-      testImg.src = imageUrl;
-    }
-    
-    function fetchCameraDirection(phoneId) {
-      // Fetch compass direction data from the phone's camera
-      // This works with the modified py.py script that captures sensor data
-      fetch(`/get_camera_direction/${phoneId}`)
-        .then(res => res.json())
-        .then(data => {
-          if (data && data.heading !== undefined) {
-            updateDirectionDisplay(data.heading, data.accuracy);
-            updatePhoneDirectionArrow(phoneId, data.heading);
-          }
-        })
-        .catch(err => {
-          // Direction data not available (sensor not supported, data too old, etc.)
-          document.getElementById('cameraDirectionText').textContent = 'Direction: Unknown';
-        });
-    }
-    
-    function updateDirectionDisplay(heading, accuracy) {
-      const directionText = document.getElementById('cameraDirectionText');
-      const cardinal = getCardinalDirection(heading);
-      const arrow = getDirectionArrow(heading);
-      
-      let accuracyText = '';
-      if (accuracy !== undefined) {
-        accuracyText = ` (±${Math.round(accuracy)}°)`;
-      }
-      
-      directionText.innerHTML = `<span class="direction-arrow">${arrow}</span> ${cardinal} ${Math.round(heading)}°${accuracyText}`;
-    }
-    
-    function getCardinalDirection(heading) {
-      const directions = [
-        'N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
-        'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'
-      ];
-      const index = Math.round(heading / 22.5) % 16;
-      return directions[index];
-    }
-    
-    function getDirectionArrow(heading) {
-      // Return appropriate arrow emoji based on direction
-      if (heading >= 337.5 || heading < 22.5) return '⬆️'; // N
-      if (heading >= 22.5 && heading < 67.5) return '↗️'; // NE
-      if (heading >= 67.5 && heading < 112.5) return '➡️'; // E
-      if (heading >= 112.5 && heading < 157.5) return '↘️'; // SE
-      if (heading >= 157.5 && heading < 202.5) return '⬇️'; // S
-      if (heading >= 202.5 && heading < 247.5) return '↙️'; // SW
-      if (heading >= 247.5 && heading < 292.5) return '⬅️'; // W
-      if (heading >= 292.5 && heading < 337.5) return '↖️'; // NW
-      return '📍';
-    }
-    
-    function updatePhoneDirectionArrow(phoneId, heading) {
-      if (!phones[phoneId] || !phones[phoneId].marker) return;
-      
-      // Remove existing direction arrow if any
-      if (phones[phoneId].directionArrow) {
-        map.removeLayer(phones[phoneId].directionArrow);
-      }
-      
-      // Create direction arrow marker
-      const phonePosition = phones[phoneId].marker.getLatLng();
-      const arrow = L.marker(phonePosition, {
-        icon: L.divIcon({
-          className: 'phone-direction-arrow',
-          html: `<div style="
-            width: 0; height: 0;
-            border-left: 8px solid transparent;
-            border-right: 8px solid transparent;
-            border-bottom: 20px solid rgba(255, 100, 100, 0.8);
-            transform: rotate(${heading}deg);
-            transform-origin: 50% 100%;
-          "></div>`,
-          iconSize: [16, 20],
-          iconAnchor: [8, 20]
-        }),
-        zIndexOffset: 1000
-      }).addTo(map);
-      
-      phones[phoneId].directionArrow = arrow;
-    }
-
-    function rotateImageLeft() {
-      currentRotation -= 90;
-      updateImageRotation();
-    }
-
-    function rotateImageRight() {
-      currentRotation += 90;
-      updateImageRotation();
-    }
-
-    function resetImageRotation() {
-      currentRotation = -90; // Reset to default landscape
-      updateImageRotation();
-    }
-
-    function updateImageRotation() {
-      const img = document.getElementById('cameraWindowImage');
-      img.style.transform = `rotate(${currentRotation}deg)`;
-    }
-
-    function downloadCurrentImage() {
-      if (!selectedCameraPhone) {
-        alert('Please select a phone first to download its image.');
-        return;
-      }
-
-      const img = document.getElementById('cameraWindowImage');
-      if (!img.src || img.src === '') {
-        alert('No image is currently loaded to download.');
-        return;
-      }
-
-      // Create a canvas to capture the rotated image
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      
-      // Create a new image object to work with
-      const sourceImg = new Image();
-      sourceImg.crossOrigin = 'anonymous'; // Handle CORS if needed
-      
-      sourceImg.onload = function() {
-        // Set canvas dimensions based on rotation
-        const isRotated = (Math.abs(currentRotation) % 180) === 90;
-        if (isRotated) {
-          canvas.width = sourceImg.height;
-          canvas.height = sourceImg.width;
-        } else {
-          canvas.width = sourceImg.width;
-          canvas.height = sourceImg.height;
-        }
-        
-        // Apply rotation and draw image
-        ctx.save();
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.rotate((currentRotation * Math.PI) / 180);
-        ctx.drawImage(sourceImg, -sourceImg.width / 2, -sourceImg.height / 2);
-        ctx.restore();
-        
-        // Create download link
-        canvas.toBlob(function(blob) {
-          const url = window.URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          
-          // Generate filename with timestamp and phone ID
-          const now = new Date();
-          const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, -5);
-          link.download = `camera-${selectedCameraPhone}-${timestamp}.jpg`;
-          
-          // Trigger download
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          window.URL.revokeObjectURL(url);
-          
-          console.log(`Downloaded image from ${selectedCameraPhone}`);
-        }, 'image/jpeg', 0.9);
-      };
-      
-      sourceImg.onerror = function() {
-        alert('Failed to load image for download. Please try again.');
-      };
-      
-      // Load the current image
-      sourceImg.src = img.src;
-    }
-
-    function onCameraPhoneSelected() {
-      const selector = document.getElementById('cameraWindowSelector');
-      selectedCameraPhone = selector.value;
-      
-      if (cameraUpdateInterval) {
-        clearInterval(cameraUpdateInterval);
-        cameraUpdateInterval = null;
-      }
-      
-      if (selectedCameraPhone) {
-        updateCameraWindowFeed();
-        // Update camera feed every 2 seconds
-        cameraUpdateInterval = setInterval(updateCameraWindowFeed, 2000);
-      } else {
-        const img = document.getElementById('cameraWindowImage');
-        const status = document.getElementById('cameraWindowStatus');
-        img.src = '';
-        status.textContent = 'No camera selected';
-        status.style.color = '#666';
-      }
-    }
-
-    // Make camera window draggable
-    function initializeCameraWindowDragging() {
-      const cameraWindow = document.getElementById('cameraWindow');
-      const header = document.getElementById('cameraWindowHeader');
-      
-      header.addEventListener('mousedown', function(e) {
-        isDragging = true;
-        const rect = cameraWindow.getBoundingClientRect();
-        dragOffset.x = e.clientX - rect.left;
-        dragOffset.y = e.clientY - rect.top;
-        
-        document.body.classList.add('camera-window-dragging');
-        e.preventDefault();
-      });
-      
-      document.addEventListener('mousemove', function(e) {
-        if (isDragging) {
-          const newX = e.clientX - dragOffset.x;
-          const newY = e.clientY - dragOffset.y;
-          
-          // Keep window within viewport bounds
-          const maxX = window.innerWidth - cameraWindow.offsetWidth;
-          const maxY = window.innerHeight - cameraWindow.offsetHeight;
-          
-          cameraWindow.style.left = Math.max(0, Math.min(newX, maxX)) + 'px';
-          cameraWindow.style.top = Math.max(0, Math.min(newY, maxY)) + 'px';
-        }
-      });
-      
-      document.addEventListener('mouseup', function() {
-        if (isDragging) {
-          isDragging = false;
-          document.body.classList.remove('camera-window-dragging');
-        }
-      });
-    }
-
-    // Event listeners for camera window
-    document.getElementById('toggleCameraWindow').addEventListener('click', toggleCameraWindow);
-    document.getElementById('cameraWindowSelector').addEventListener('change', onCameraPhoneSelected);
-    
-    // Add double-click on header to close (alternative method)
-    document.getElementById('cameraWindowHeader').addEventListener('dblclick', function(e) {
-      if (cameraWindowOpen) {
-        toggleCameraWindow();
-      }
-    });
-    
-    // Add ESC key support to close camera window
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape' && cameraWindowOpen) {
-        toggleCameraWindow();
-      }
-    });
-    
-    // Rotation control event listeners
-    document.getElementById('rotateLeft').addEventListener('click', rotateImageLeft);
-    document.getElementById('rotateRight').addEventListener('click', rotateImageRight);
-    document.getElementById('resetRotation').addEventListener('click', resetImageRotation);
-    
-    // Download button event listener
-    document.getElementById('downloadImage').addEventListener('click', downloadCurrentImage);
-    
-    // Initialize dragging functionality
-    initializeCameraWindowDragging();
 
     // Notes functionality
     let notes = [];
