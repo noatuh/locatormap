@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify
 import json
 import os
 import requests
+import time
 
 app = Flask(__name__)
 DATA_FILE = "drawings.json"
@@ -77,6 +78,9 @@ def update_location():
 
 
     phones[phone_id] = phone_data
+
+    # Add a timestamp to know when the location was last updated
+    phone_data["timestamp"] = time.time()
 
     with open(PHONES_FILE, "w") as f:
         json.dump(phones, f)

@@ -103,7 +103,7 @@
     #toggleButtons {
       position: absolute; bottom: 15px; left: 50%;
       transform: translateX(-50%); z-index: 1100;
-      width: 340px; /* Wide enough to place buttons 170px from center */
+      width: 520px; /* Increased width for the new button */
       display: flex;
       align-items: center;
       gap: 10px;
@@ -123,6 +123,16 @@
       transform: translateY(-1px);
     }
     
+    #shareLocationBtn {
+        background-color: #28a745;
+        color: white;
+        text-align: center;
+    }
+    #shareLocationBtn:hover {
+        background-color: #218838;
+        color: white;
+    }
+
     #toggleNotes, #toggleNavigation, #toggleMenu {
       background: linear-gradient(135deg, #007bff, #6610f2);
       color: white;
@@ -457,6 +467,7 @@
     <button id="toggleNotes" class="toggle-btn">Toggle Notes</button>
     <button id="toggleNavigation" class="toggle-btn">Navigation</button>
     <button id="toggleMenu" class="toggle-btn">Toggle Menu</button>
+    <button id="shareLocationBtn" class="toggle-btn" style="background-color: #28a745; color: white;">Share Location</button>
   </div>
   
   <!-- Left sidebar for notes -->
@@ -1861,6 +1872,7 @@
         const measureEnd = e.latlng;
         
         // Calculate distance in meters and yards
+       
         const distanceMeters = measureStart.distanceTo(measureEnd);
         const distanceYards = distanceMeters * 1.09361;
         
@@ -2178,9 +2190,54 @@
       document.getElementById('navigationPanel').classList.toggle('hidden');
     });
     
-    // Add event listeners for phone label and direction arrow toggle buttons
-    document.getElementById("toggleLabels").addEventListener('click', togglePhoneLabels);
-    document.getElementById("toggleDirectionArrows").addEventListener('click', toggleDirectionArrows);
+    // Share location functionality
+    document.getElementById('shareLocationBtn').addEventListener('click', () => {
+      if (!navigator.geolocation) {
+        alert("Geolocation is not supported by your browser.");
+        return;
+      }
+
+      const phoneId = prompt("Please enter your name or a unique ID for your location marker:", "web-client");
+      if (!phoneId) {
+        return; // User cancelled the prompt
+      }
+
+      function success(position) {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        const heading = position.coords.heading;
+        const alt = position.coords.altitude;
+
+        console.log(`Sharing location for ${phoneId}: ${lat}, ${lng}`);
+
+        fetch("/update_location", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: phoneId, lat, lng, heading, alt })
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.status === 'updated') {
+            alert('Location shared successfully!');
+            updateAllPhones(); // Refresh the map to show the new location
+          } else {
+            alert('Error sharing location: ' + (data.message || 'Unknown error'));
+          }
+        })
+        .catch(error => {
+          console.error("Error sharing location:", error);
+          alert("An error occurred while sharing your location.");
+        });
+      }
+
+      function error() {
+        alert("Unable to retrieve your location. Please ensure you have enabled location services for your browser.");
+      }
+
+      navigator.geolocation.getCurrentPosition(success, error, {
+        enableHighAccuracy: true
+      });
+    });
     
     } // End of initializeMap function
   </script>
