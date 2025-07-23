@@ -116,6 +116,7 @@
       font-size: 14px; font-weight: 500;
       min-width: 120px;
       white-space: nowrap;
+      text-align: center;
     }
     .toggle-btn:hover { 
       background-color: #f0f0f0; 
@@ -126,7 +127,6 @@
     #shareLocationBtn {
         background-color: #28a745;
         color: white;
-        text-align: center;
     }
     #shareLocationBtn:hover {
         background-color: #218838;
@@ -467,7 +467,8 @@
     <button id="toggleNotes" class="toggle-btn">Toggle Notes</button>
     <button id="toggleNavigation" class="toggle-btn">Navigation</button>
     <button id="toggleMenu" class="toggle-btn">Toggle Menu</button>
-    <button id="shareLocationBtn" class="toggle-btn" style="background-color: #28a745; color: white;">Share Location</button>
+    <button id="shareLocationBtn" class="toggle-btn">Share Location </button>
+    <button id="toggleCompass" class="toggle-btn">Compass</button>
   </div>
   
   <!-- Left sidebar for notes -->
@@ -610,7 +611,7 @@
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
     // Password protection
-    const correctPassword = "1234";
+    const correctPassword = "123";
     
     function checkPassword() {
       const passwordInput = document.getElementById('passwordInput');
@@ -2240,6 +2241,17 @@
     });
     
     } // End of initializeMap function
+  // Compass toggle functionality
+  let compassVisible = true;
+  const compassElem = document.getElementById('compass');
+  const toggleCompassBtn = document.getElementById('toggleCompass');
+  if (toggleCompassBtn && compassElem) {
+    toggleCompassBtn.addEventListener('click', function() {
+      compassVisible = !compassVisible;
+      compassElem.style.display = compassVisible ? 'flex' : 'none';
+      this.innerText = compassVisible ? 'Compass' : 'Compass';
+    });
+  }
   </script>
 </body>
 </html>
