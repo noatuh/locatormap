@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify
 import json
 import os
+import requests
 
 app = Flask(__name__)
 DATA_FILE = "drawings.json"
@@ -272,6 +273,196 @@ def clear_notes():
     with open(NOTES_FILE, "w") as f:
         json.dump([], f)
     return jsonify({"status": "cleared"})
+
+@app.route("/get_route", methods=["POST"])
+def get_route():
+    """Get routing directions between two points using multiple routing services"""
+    data = request.get_json()
+    start_lat = data.get("start_lat")
+    start_lng = data.get("start_lng")
+    end_lat = data.get("end_lat")
+    end_lng = data.get("end_lng")
+    mode = data.get("mode", "walking")  # walking, driving, cycling
+    
+    if not all([start_lat, start_lng, end_lat, end_lng]):
+        return jsonify({"error": "Missing coordinates"}), 400
+    
+    # Try multiple routing services in order of preference
+    route_data = None
+    service_used = None
+    
+    # 1. Try MapBox Directions API (free tier available)
+    try:
+        mapbox_token = "YOUR_MAPBOX_TOKEN_HERE"  # Replace with your MapBox token
+        if mapbox_token != "YOUR_MAPBOX_TOKEN_HERE":
+            profile = "walking" if mode == "walking" else "driving" if mode == "driving" else "cycling"
+            url = f"https://api.mapbox.com/directions/v5/mapbox/{profile}/{start_lng},{start_lat};{end_lng},{end_lat}"
+            params = {
+                "access_token": mapbox_token,
+                "geometries": "geojson",
+                "overview": "full",
+                "steps": "true"
+            }
+            response = requests.get(url, params=params, timeout=10)
+            if response.status_code == 200:
+                mapbox_data = response.json()
+                if mapbox_data.get("routes"):
+                    route = mapbox_data["routes"][0]
+                    route_data = {
+                        "type": "FeatureCollection",
+                        "features": [{
+                            "type": "Feature",
+                            "geometry": route["geometry"],
+                            "properties": {
+                                "distance": route.get("distance", 0),
+                                "duration": route.get("duration", 0),
+                                "steps": route.get("legs", [{}])[0].get("steps", []),
+                                "service": "mapbox"
+                            }
+                        }]
+                    }
+                    service_used = "MapBox"
+    except Exception as e:
+        print(f"MapBox routing failed: {e}")
+    
+    # 2. Try OSRM (Open Source Routing Machine) - free public instance
+    if not route_data:
+        try:
+            profile = "foot" if mode == "walking" else "car" if mode == "driving" else "bike"
+            url = f"http://router.project-osrm.org/route/v1/{profile}/{start_lng},{start_lat};{end_lng},{end_lat}"
+            params = {
+                "overview": "full",
+                "geometries": "geojson",
+                "steps": "true"
+            }
+            response = requests.get(url, params=params, timeout=10)
+            if response.status_code == 200:
+                osrm_data = response.json()
+                if osrm_data.get("routes"):
+                    route = osrm_data["routes"][0]
+                    route_data = {
+                        "type": "FeatureCollection",
+                        "features": [{
+                            "type": "Feature",
+                            "geometry": route["geometry"],
+                            "properties": {
+                                "distance": route.get("distance", 0),
+                                "duration": route.get("duration", 0),
+                                "steps": route.get("legs", [{}])[0].get("steps", []),
+                                "service": "osrm"
+                            }
+                        }]
+                    }
+                    service_used = "OSRM"
+        except Exception as e:
+            print(f"OSRM routing failed: {e}")
+    
+    # 3. Try OpenRouteService as backup
+    if not route_data:
+        try:
+            ors_api_key = "YOUR_ORS_API_KEY_HERE"  # Get free key from openrouteservice.org
+            if ors_api_key != "YOUR_ORS_API_KEY_HERE":
+                profile = "foot-walking" if mode == "walking" else "driving-car" if mode == "driving" else "cycling-regular"
+                url = f"https://api.openrouteservice.org/v2/directions/{profile}"
+                headers = {
+                    'Accept': 'application/json, application/geo+json',
+                    'Authorization': ors_api_key,
+                    'Content-Type': 'application/json'
+                }
+                body = {
+                    "coordinates": [[start_lng, start_lat], [end_lng, end_lat]],
+                    "format": "geojson",
+                    "instructions": True
+                }
+                response = requests.post(url, json=body, headers=headers, timeout=10)
+                if response.status_code == 200:
+                    route_data = response.json()
+                    if route_data.get("features"):
+                        route_data["features"][0]["properties"]["service"] = "openrouteservice"
+                        service_used = "OpenRouteService"
+        except Exception as e:
+            print(f"OpenRouteService routing failed: {e}")
+    
+    # 4. Fallback: Use GraphHopper public API
+    if not route_data:
+        try:
+            vehicle = "foot" if mode == "walking" else "car" if mode == "driving" else "bike"
+            url = "https://graphhopper.com/api/1/route"
+            params = {
+                "point": [f"{start_lat},{start_lng}", f"{end_lat},{end_lng}"],
+                "vehicle": vehicle,
+                "locale": "en",
+                "instructions": "true",
+                "calc_points": "true",
+                "debug": "false",
+                "elevation": "false",
+                "points_encoded": "false"
+            }
+            response = requests.get(url, params=params, timeout=10)
+            if response.status_code == 200:
+                gh_data = response.json()
+                if gh_data.get("paths"):
+                    path = gh_data["paths"][0]
+                    coordinates = [[point[1], point[0]] for point in path["points"]["coordinates"]]
+                    route_data = {
+                        "type": "FeatureCollection",
+                        "features": [{
+                            "type": "Feature",
+                            "geometry": {
+                                "type": "LineString",
+                                "coordinates": coordinates
+                            },
+                            "properties": {
+                                "distance": path.get("distance", 0),
+                                "time": path.get("time", 0),
+                                "instructions": path.get("instructions", []),
+                                "service": "graphhopper"
+                            }
+                        }]
+                    }
+                    service_used = "GraphHopper"
+        except Exception as e:
+            print(f"GraphHopper routing failed: {e}")
+    
+    # Final fallback: straight line
+    if not route_data:
+        route_data = {
+            "type": "FeatureCollection",
+            "features": [{
+                "type": "Feature",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": [[start_lng, start_lat], [end_lng, end_lat]]
+                },
+                "properties": {
+                    "distance": calculate_distance(start_lat, start_lng, end_lat, end_lng),
+                    "fallback": True,
+                    "service": "fallback"
+                }
+            }]
+        }
+        service_used = "Fallback (straight line)"
+    
+    # Add service info to response
+    if route_data and route_data.get("features"):
+        route_data["service_used"] = service_used
+    
+    return jsonify(route_data)
+
+def calculate_distance(lat1, lng1, lat2, lng2):
+    """Calculate distance between two points using Haversine formula"""
+    import math
+    
+    R = 6371000  # Earth's radius in meters
+    lat1_rad = math.radians(lat1)
+    lat2_rad = math.radians(lat2)
+    delta_lat = math.radians(lat2 - lat1)
+    delta_lng = math.radians(lng2 - lng1)
+    
+    a = math.sin(delta_lat/2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lng/2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    
+    return R * c
 
 if __name__ == "__main__":
     print("Starting main server on port 5050...")

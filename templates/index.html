@@ -52,13 +52,25 @@
     #notesPanel.hidden {
       transform: translateX(-100%);
     }
-    
-    #notesPanelHeader {
+
+    /* Right sidebar for navigation */
+    #navigationPanel {
+      position: fixed; top: 0; right: 0; width: 320px; height: 100%;
+      background: rgba(255, 255, 255, 0.95); z-index: 1000;
+      box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+      display: flex; flex-direction: column;
+      transition: transform 0.3s ease;
+    }
+    #navigationPanel.hidden {
+      transform: translateX(100%);
+    }
+
+    .panel-header {
       background: #343a40; color: white; padding: 15px;
       font-size: 18px; font-weight: bold; text-align: center;
     }
-    
-    #notesPanelContent {
+
+    .panel-content {
       flex: 1; padding: 15px; overflow: hidden;
       display: flex; flex-direction: column;
     }
@@ -110,11 +122,11 @@
       transform: translateY(-1px);
     }
     
-    #toggleNotes, #toggleMenu {
+    #toggleNotes, #toggleNavigation, #toggleMenu {
       background: linear-gradient(135deg, #007bff, #6610f2);
       color: white;
     }
-    #toggleNotes:hover, #toggleMenu:hover {
+    #toggleNotes:hover, #toggleNavigation:hover, #toggleMenu:hover {
       background: linear-gradient(135deg, #0056b3, #520dc2);
       color: white;
     }
@@ -290,6 +302,44 @@
       background: #545b62;
     }
 
+    /* Navigation styles */
+    #navigationInfo {
+      display: none;
+      margin-top: 8px;
+      padding: 8px;
+      background-color: #f0f8ff;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    #routeDistance {
+      font-weight: bold;
+    }
+
+    #routeInstructions {
+      margin-top: 4px;
+      color: #666;
+    }
+
+    .navigation-marker {
+      border-radius: 50%;
+      border: 3px solid #fff;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    }
+
+    .route-line {
+      z-index: 500;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      100% { transform: scale(1.2); }
+    }
+
+    .phone-marker-highlight {
+      animation: pulse 1s ease-in-out infinite alternate;
+    }
+
     /* Compass widget styles */
     #compass {
       position: fixed;
@@ -404,21 +454,75 @@
   <!-- Toggle buttons -->
   <div id="toggleButtons">
     <button id="toggleNotes" class="toggle-btn">Toggle Notes</button>
+    <button id="toggleNavigation" class="toggle-btn">Navigation</button>
     <button id="toggleMenu" class="toggle-btn">Toggle Menu</button>
   </div>
   
   <!-- Left sidebar for notes -->
   <div id="notesPanel" class="hidden">
-    <div id="notesPanelHeader">
+    <div class="panel-header">
       📝 Team Notes
     </div>
-    <div id="notesPanelContent">
+    <div class="panel-content">
       <div id="notesControls">
         <button id="addNote">Add Note</button>
         <button id="refreshNotes">Refresh</button>
       </div>
       <div id="notesList">
         <p id="noNotesMessage">No notes posted yet</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right sidebar for navigation -->
+  <div id="navigationPanel" class="hidden">
+    <div class="panel-header">
+      🧭 Navigation
+    </div>
+    <div class="panel-content">
+      <!-- Transportation Mode Selection -->
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #333;">Transportation Mode:</label>
+        <select id="transportMode" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px;">
+          <option value="walking">🚶 Walking</option>
+          <option value="driving">🚗 Driving</option>
+          <option value="cycling">🚴 Cycling</option>
+        </select>
+      </div>
+      
+      <!-- Navigation Controls -->
+      <div style="margin-bottom: 15px;">
+        <button id="setDestination" style="width: 100%; padding: 10px; margin-bottom: 8px; background: #007bff; color: white; border: none; border-radius: 4px; font-size: 14px; cursor: pointer;">📍 Set Destination</button>
+        <button id="clearRoute" style="width: 100%; padding: 8px; background: #dc3545; color: white; border: none; border-radius: 4px; font-size: 14px; cursor: pointer;">❌ Clear Route</button>
+      </div>
+      
+      <!-- Route Information -->
+      <div id="routeInfo" style="display: none; padding: 12px; background: #f8f9fa; border-radius: 6px; margin-bottom: 15px;">
+        <h5 style="margin: 0 0 8px 0; color: #333;">📊 Route Summary</h5>
+        <div id="routeStats" style="font-size: 13px; color: #666; margin-bottom: 8px;"></div>
+        <div id="routeStatus" style="font-size: 12px; color: #666; font-style: italic;"></div>
+      </div>
+      
+      <!-- Turn-by-Turn Directions -->
+      <div id="directionsContainer" style="display: none; margin-bottom: 15px;">
+        <h5 style="margin: 0 0 10px 0; color: #333;">📋 Directions</h5>
+        <div id="directionsList" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; background: white;">
+          <!-- Directions will be populated here -->
+        </div>
+      </div>
+      
+      <!-- Current Location Info -->
+      <div id="currentLocationInfo" style="padding: 12px; background: #e7f3ff; border-radius: 6px; margin-bottom: 15px;">
+        <h5 style="margin: 0 0 8px 0; color: #333;">📍 Current Location</h5>
+        <div id="locationCoords" style="font-size: 12px; color: #666;">Waiting for location...</div>
+        <button id="centerOnLocation" style="width: 100%; padding: 6px; margin-top: 8px; background: #28a745; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">📌 Center Map on Me</button>
+      </div>
+      
+      <div style="border-top: 1px solid #ccc; padding-top: 15px;">
+        <h5 style="margin: 0 0 10px 0; color: #333;">Quick Destinations</h5>
+        <div id="quickDestinations">
+          <p style="font-size: 12px; color: #666; margin: 0;">Click on any POI pin to navigate there, or use "Set Destination" to choose a custom location.</p>
+        </div>
       </div>
     </div>
   </div>
@@ -669,7 +773,7 @@
     const phones = {};
 
     function updateAllPhones() {
-      fetch("/load_phones")
+      return fetch("/load_phones")
         .then(res => res.json())
         .then(data => {
           Object.keys(data).forEach(id => {
@@ -682,6 +786,8 @@
 
             if (phones[id] && phones[id].marker) {
               // Update existing phone position
+              phones[id].lat = lat; // Store lat
+              phones[id].lng = lng; // Store lng
               phones[id].marker.setLatLng(latlng);
               phones[id].label.setLatLng(latlng);
               phones[id].alt = alt; // Store altitude
@@ -708,7 +814,7 @@
               
             } else {
               // Create new phone
-              phones[id] = { alt: alt }; // Initialize phone object with altitude
+              phones[id] = { lat: lat, lng: lng, alt: alt }; // Initialize phone object with lat, lng, and altitude
               if (typeof heading === 'number') {
                 phones[id].heading = heading;
               }
@@ -797,8 +903,16 @@
         ids.forEach(id => {
           const entry = document.createElement('div');
           entry.className = 'phone-entry';
-          const text = document.createElement('span');
-          let displayText = `${id}`;
+          entry.style.display = 'flex';
+          entry.style.flexDirection = 'column';
+          entry.style.marginBottom = '8px';
+          entry.style.padding = '8px';
+          entry.style.backgroundColor = 'rgba(240, 240, 240, 0.8)';
+          entry.style.borderRadius = '4px';
+          
+          // Phone info text
+          const text = document.createElement('div');
+          let displayText = `📱 ${id}`;
           if (typeof phones[id].heading === 'number') {
             const heading = Math.round(phones[id].heading);
             const cardinalDir = getCardinalDirection(heading);
@@ -808,7 +922,45 @@
             displayText += ` | Alt: ${phones[id].alt.toFixed(1)}m`;
           }
           text.textContent = displayText;
+          text.style.fontSize = '13px';
+          text.style.marginBottom = '6px';
+          
+          // Button container
+          const buttonContainer = document.createElement('div');
+          buttonContainer.style.display = 'flex';
+          buttonContainer.style.gap = '4px';
+          
+          // Center map button
+          const centerBtn = document.createElement('button');
+          centerBtn.textContent = 'Center';
+          centerBtn.style.flex = '1';
+          centerBtn.style.padding = '4px 8px';
+          centerBtn.style.fontSize = '11px';
+          centerBtn.style.backgroundColor = '#28a745';
+          centerBtn.style.color = 'white';
+          centerBtn.style.border = 'none';
+          centerBtn.style.borderRadius = '3px';
+          centerBtn.style.cursor = 'pointer';
+          centerBtn.onclick = () => centerOnPhone(id);
+          
+          // Navigate from button
+          const navBtn = document.createElement('button');
+          navBtn.textContent = 'Nav From';
+          navBtn.style.flex = '1';
+          navBtn.style.padding = '4px 8px';
+          navBtn.style.fontSize = '11px';
+          navBtn.style.backgroundColor = '#007bff';
+          navBtn.style.color = 'white';
+          navBtn.style.border = 'none';
+          navBtn.style.borderRadius = '3px';
+          navBtn.style.cursor = 'pointer';
+          navBtn.onclick = () => setNavigationOrigin(id);
+          
+          buttonContainer.appendChild(centerBtn);
+          buttonContainer.appendChild(navBtn);
+          
           entry.appendChild(text);
+          entry.appendChild(buttonContainer);
           phoneEntries.appendChild(entry);
         });
       }
@@ -818,6 +970,110 @@
       const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
       const index = Math.round(heading / 45) % 8;
       return directions[index];
+    }
+
+    async function centerOnPhone(phoneId) {
+      await updateAllPhones(); // Ensure data is fresh
+      if (phones[phoneId] && phones[phoneId].lat !== undefined && phones[phoneId].lng !== undefined) {
+        map.setView([phones[phoneId].lat, phones[phoneId].lng], 16);
+        
+        // Optional: highlight the phone temporarily
+        if (phones[phoneId].marker) {
+          const originalIcon = phones[phoneId].marker.getIcon();
+          // Flash the marker
+          setTimeout(() => {
+            if (phones[phoneId].marker) {
+              phones[phoneId].marker.setIcon(L.divIcon({
+                className: 'phone-marker-highlight',
+                html: `<div style="width: 20px; height: 20px; background-color: #ffff00; border: 3px solid #ff0000; border-radius: 50%; animation: pulse 1s ease-in-out 3 alternate;"></div>`,
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
+              }));
+              
+              // Restore original icon after animation
+              setTimeout(() => {
+                if (phones[phoneId].marker) {
+                  phones[phoneId].marker.setIcon(originalIcon);
+                }
+              }, 3000);
+            }
+          }, 100);
+        }
+      } else {
+        alert(`No location available for phone: ${phoneId}`);
+      }
+    }
+
+    let navigationOriginPhone = null;
+
+    async function setNavigationOrigin(phoneId) {
+      await updateAllPhones(); // Ensure data is fresh
+      if (phones[phoneId] && phones[phoneId].lat !== undefined && phones[phoneId].lng !== undefined) {
+        navigationOriginPhone = phoneId;
+        
+        // Update the current location info in navigation panel
+        const locationInfo = document.getElementById('currentLocationInfo');
+        if (locationInfo) {
+          locationInfo.style.backgroundColor = '#d4edda';
+          locationInfo.innerHTML = `
+            <h5 style="margin: 0 0 8px 0; color: #333;">Navigation Origin</h5>
+            <div style="font-size: 12px; color: #666;">📱 ${phoneId}</div>
+            <div style="font-size: 11px; color: #666;">Lat: ${phones[phoneId].lat.toFixed(6)}<br>Lng: ${phones[phoneId].lng.toFixed(6)}</div>
+            <button id="centerOnOrigin" style="width: 100%; padding: 6px; margin-top: 8px; background: #28a745; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">Center on Origin</button>
+            <button id="clearOrigin" style="width: 100%; padding: 4px; margin-top: 4px; background: #6c757d; color: white; border: none; border-radius: 4px; font-size: 11px; cursor: pointer;">Clear Origin</button>
+          `;
+          
+          // Add event listeners for the new buttons
+          document.getElementById('centerOnOrigin').addEventListener('click', () => {
+            centerOnPhone(phoneId);
+          });
+          
+          document.getElementById('clearOrigin').addEventListener('click', () => {
+            clearNavigationOrigin();
+          });
+        }
+        
+        // Show navigation panel if hidden
+        if (document.getElementById('navigationPanel').classList.contains('hidden')) {
+          document.getElementById('navigationPanel').classList.remove('hidden');
+        }
+        
+        alert(`Navigation origin set to phone: ${phoneId}. Click "Set Destination" to choose where to navigate to.`);
+      } else {
+        alert(`No location available for phone: ${phoneId}`);
+      }
+    }
+
+    function clearNavigationOrigin() {
+      navigationOriginPhone = null;
+      updateLocationInfo(); // Reset to default location info
+      
+      // Restore original location info panel
+      const locationInfo = document.getElementById('currentLocationInfo');
+      if (locationInfo) {
+        locationInfo.style.backgroundColor = '#e7f3ff';
+        locationInfo.innerHTML = `
+          <h5 style="margin: 0 0 8px 0; color: #333;">📍 Current Location</h5>
+          <div id="locationCoords" style="font-size: 12px; color: #666;">Waiting for location...</div>
+          <button id="centerOnLocation" style="width: 100%; padding: 6px; margin-top: 8px; background: #28a745; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">📌 Center on Me</button>
+        `;
+        
+        // Re-add event listener for center button
+        document.getElementById('centerOnLocation').addEventListener('click', function() {
+          let userLocation = null;
+          for (const phoneId in phones) {
+            if (phones[phoneId] && phones[phoneId].lat !== undefined) {
+              userLocation = { lat: phones[phoneId].lat, lng: phones[phoneId].lng };
+              break;
+            }
+          }
+          if (userLocation) {
+            map.setView([userLocation.lat, userLocation.lng], 16);
+          } else {
+            alert('No location available to center on.');
+          }
+        });
+      }
     }
 
     let phoneLabelsVisible = true;
@@ -1030,8 +1286,12 @@
       const popupContent = `
         <div class="poi-title">${poi.title}</div>
         <div class="poi-description">${poi.description || ''}</div>
-        <button class="delete-poi-btn" style="margin-top: 8px; background-color: #ff4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; width: 100%;" 
-          data-poi-id="${poi.id}">Delete Pin</button>
+        <div style="margin-top: 8px; display: flex; gap: 4px;">
+          <button class="navigate-to-poi-btn" style="flex: 1; background-color: #007bff; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;" 
+            data-poi-lat="${poi.lat}" data-poi-lng="${poi.lng}">Navigate Here</button>
+          <button class="delete-poi-btn" style="flex: 1; background-color: #ff4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;" 
+            data-poi-id="${poi.id}">Delete</button>
+        </div>
       `;
       
       marker.bindPopup(popupContent, {
@@ -1042,12 +1302,30 @@
       // Store reference to original POI data
       marker.poi = poi;
 
-      // Add event listener for delete button after popup opens
+      // Add event listeners for navigation and delete buttons after popup opens
       marker.on('popupopen', function() {
-        document.querySelector('.delete-poi-btn[data-poi-id="'+poi.id+'"]').addEventListener('click', function() {
-          deletePOI(poi.id);
-          map.closePopup();
-        });
+        const deleteBtn = document.querySelector('.delete-poi-btn[data-poi-id="'+poi.id+'"]');
+        if (deleteBtn) {
+          deleteBtn.addEventListener('click', function() {
+            deletePOI(poi.id);
+            map.closePopup();
+          });
+        }
+        
+        const navigateBtn = document.querySelector('.navigate-to-poi-btn[data-poi-lat="'+poi.lat+'"]');
+        if (navigateBtn) {
+          navigateBtn.addEventListener('click', function() {
+            const lat = parseFloat(this.getAttribute('data-poi-lat'));
+            const lng = parseFloat(this.getAttribute('data-poi-lng'));
+            calculateRoute({ lat: lat, lng: lng });
+            map.closePopup();
+            
+            // Show navigation panel if hidden
+            if (document.getElementById('navigationPanel').classList.contains('hidden')) {
+              document.getElementById('navigationPanel').classList.remove('hidden');
+            }
+          });
+        }
       });
 
       return marker;
@@ -1180,6 +1458,374 @@
 
     document.getElementById("clearAllPins").addEventListener('click', clearAllPins);
     document.getElementById("clearAllPhones").addEventListener('click', clearAllPhones);
+
+    // Navigation implementation
+    let navigationActive = false;
+    let navigationTarget = null;
+    let currentRoute = null;
+    let navigationMarker = null;
+    let routeLayer = L.layerGroup().addTo(map);
+
+    function startNavigation() {
+      navigationActive = true;
+      document.getElementById('setDestination').disabled = true;
+      document.getElementById('setDestination').innerText = 'Click destination on map';
+      map.getContainer().style.cursor = 'crosshair';
+      
+      const clickHandler = function(e) {
+        navigationTarget = e.latlng;
+        
+        // Create destination marker
+        if (navigationMarker) {
+          map.removeLayer(navigationMarker);
+        }
+        
+        navigationMarker = L.marker([e.latlng.lat, e.latlng.lng], {
+          icon: L.divIcon({
+            className: 'navigation-marker',
+            html: `<div style="width: 20px; height: 20px; background-color: #ff4444; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.3);"></div>`,
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+          })
+        }).addTo(map);
+        
+        // Get user's current location and calculate route
+        calculateRoute(e.latlng);
+        
+        document.getElementById('setDestination').disabled = false;
+        document.getElementById('setDestination').innerText = 'Set Destination';
+        navigationActive = false;
+        map.getContainer().style.cursor = '';
+        map.off('click', clickHandler);
+      };
+      
+      map.once('click', clickHandler);
+    }
+
+    function calculateRoute(destination) {
+      // Get starting location - prioritize selected origin phone, then any tracked phone, then map center
+      let userLocation = null;
+      let locationSource = '';
+      
+      // Check if a specific origin phone is selected
+      if (navigationOriginPhone && phones[navigationOriginPhone] && phones[navigationOriginPhone].lat !== undefined) {
+        userLocation = { lat: phones[navigationOriginPhone].lat, lng: phones[navigationOriginPhone].lng };
+        locationSource = `📱 ${navigationOriginPhone}`;
+      } else {
+        // Look for any available phone location
+        for (const phoneId in phones) {
+          if (phones[phoneId] && phones[phoneId].lat !== undefined) {
+            userLocation = { lat: phones[phoneId].lat, lng: phones[phoneId].lng };
+            locationSource = `📱 ${phoneId} (auto-selected)`;
+            break;
+          }
+        }
+      }
+      
+      if (!userLocation) {
+        // Fallback: use map center
+        const center = map.getCenter();
+        userLocation = { lat: center.lat, lng: center.lng };
+        locationSource = 'Map center (no phones available)';
+        alert('Using map center as starting point. For accurate navigation, set a navigation origin from a tracked phone.');
+      }
+      
+      // Send route request to server with transportation mode
+      const transportMode = document.getElementById('transportMode') ? document.getElementById('transportMode').value : 'walking';
+      fetch('/get_route', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          start_lat: userLocation.lat,
+          start_lng: userLocation.lng,
+          end_lat: destination.lat,
+          end_lng: destination.lng,
+          mode: transportMode
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        displayRoute(data, userLocation, destination, locationSource);
+      })
+      .catch(error => {
+        console.error('Error getting route:', error);
+        // Fallback: draw straight line
+        drawStraightLineRoute(userLocation, destination, locationSource);
+      });
+    }
+
+    function displayRoute(routeData, start, end, locationSource) {
+      // Clear existing route
+      routeLayer.clearLayers();
+      
+      if (routeData.features && routeData.features.length > 0) {
+        const feature = routeData.features[0];
+        const coordinates = feature.geometry.coordinates;
+        const properties = feature.properties || {};
+        
+        // Convert coordinates to Leaflet format [lat, lng]
+        const latlngs = coordinates.map(coord => [coord[1], coord[0]]);
+        
+        // Create route line with different styles based on transport mode
+        const transportMode = document.getElementById('transportMode') ? document.getElementById('transportMode').value : 'walking';
+        let routeColor = '#007bff';
+        let routeWeight = 5;
+        
+        switch(transportMode) {
+          case 'walking':
+            routeColor = '#28a745';
+            routeWeight = 4;
+            break;
+          case 'driving':
+            routeColor = '#dc3545';
+            routeWeight = 6;
+            break;
+          case 'cycling':
+            routeColor = '#fd7e14';
+            routeWeight = 4;
+            break;
+        }
+        
+        // Create route line
+        currentRoute = L.polyline(latlngs, {
+          color: routeColor,
+          weight: routeWeight,
+          opacity: 0.8,
+          className: 'route-line'
+        }).addTo(routeLayer);
+        
+        // Calculate and display route information
+        let distance = 0;
+        let duration = 0;
+        
+        if (properties.distance) {
+          distance = (properties.distance / 1000).toFixed(2);
+        } else {
+          // Calculate straight-line distance as fallback
+          distance = (map.distance([start.lat, start.lng], [end.lat, end.lng]) / 1000).toFixed(2);
+        }
+        
+        if (properties.duration) {
+          duration = Math.round(properties.duration / 60);
+        } else if (properties.time) {
+          duration = Math.round(properties.time / 60000);
+        }
+        
+        // Show navigation info
+        document.getElementById('routeInfo').style.display = 'block';
+        
+        const transportEmoji = {
+          walking: '🚶',
+          driving: '🚗',
+          cycling: '🚴'
+        };
+        
+        let routeStatsHTML = `
+          <div style="margin-bottom: 5px;">
+            <strong>📍 From:</strong> ${locationSource || 'Current location'}
+          </div>
+          <div style="margin-bottom: 5px;">
+            <strong>${transportEmoji[transportMode]} Distance:</strong> ${distance} km
+          </div>
+        `;
+        
+        if (duration > 0) {
+          const hours = Math.floor(duration / 60);
+          const mins = duration % 60;
+          let durationText = '';
+          if (hours > 0) {
+            durationText = `${hours}h ${mins}m`;
+          } else {
+            durationText = `${mins}m`;
+          }
+          routeStatsHTML += `
+            <div style="margin-bottom: 5px;">
+              <strong>⏱️ Duration:</strong> ${durationText}
+            </div>
+          `;
+        }
+        
+        document.getElementById('routeStats').innerHTML = routeStatsHTML;
+        
+        // Show service used
+        const serviceUsed = routeData.service_used || properties.service || 'Unknown';
+        let statusMessage = '';
+        
+        if (properties.fallback) {
+          statusMessage = '⚠️ Showing straight-line route (routing service unavailable)';
+          document.getElementById('routeStatus').style.color = '#ffc107';
+        } else {
+          statusMessage = `✅ Route provided by ${serviceUsed}`;
+          document.getElementById('routeStatus').style.color = '#28a745';
+        }
+        
+        document.getElementById('routeStatus').innerText = statusMessage;
+        
+        // Display turn-by-turn directions if available
+        displayDirections(properties);
+        
+        // Fit map to show the route
+        const routeBounds = currentRoute.getBounds();
+        const startMarker = L.latLng(start.lat, start.lng);
+        const endMarker = L.latLng(end.lat, end.lng);
+        const bounds = L.latLngBounds([startMarker, endMarker]).extend(routeBounds);
+        map.fitBounds(bounds, { padding: [20, 20] });
+        
+      } else {
+        // Fallback: draw straight line
+        drawStraightLineRoute(start, end, locationSource);
+      }
+    }
+
+    function displayDirections(properties) {
+      const directionsContainer = document.getElementById('directionsContainer');
+      const directionsList = document.getElementById('directionsList');
+      
+      let directions = [];
+      
+      // Parse directions from different routing services
+      if (properties.steps && Array.isArray(properties.steps)) {
+        // OSRM or MapBox format
+        directions = properties.steps.map((step, index) => {
+          const instruction = step.maneuver?.instruction || step.instruction || `Step ${index + 1}`;
+          const distance = step.distance ? `(${(step.distance / 1000).toFixed(2)} km)` : '';
+          return { instruction, distance };
+        });
+      } else if (properties.instructions && Array.isArray(properties.instructions)) {
+        // GraphHopper format
+        directions = properties.instructions.map((instruction, index) => {
+          const text = instruction.text || `Step ${index + 1}`;
+          const distance = instruction.distance ? `(${(instruction.distance / 1000).toFixed(2)} km)` : '';
+          return { instruction: text, distance };
+        });
+      }
+      
+      if (directions.length > 0) {
+        directionsContainer.style.display = 'block';
+        
+        const directionsHTML = directions.map((dir, index) => `
+          <div style="padding: 8px; border-bottom: 1px solid #eee; font-size: 12px;">
+            <div style="font-weight: bold; color: #333; margin-bottom: 2px;">
+              ${index + 1}. ${dir.instruction}
+            </div>
+            ${dir.distance ? `<div style="color: #666; font-size: 11px;">${dir.distance}</div>` : ''}
+          </div>
+        `).join('');
+        
+        directionsList.innerHTML = directionsHTML;
+      } else {
+        directionsContainer.style.display = 'none';
+      }
+    }
+
+    function drawStraightLineRoute(start, end, locationSource) {
+      routeLayer.clearLayers();
+      
+      currentRoute = L.polyline([[start.lat, start.lng], [end.lat, end.lng]], {
+        color: '#ff4444',
+        weight: 3,
+        opacity: 0.6,
+        dashArray: '10, 10',
+        className: 'route-line'
+      }).addTo(routeLayer);
+      
+      const distance = (map.distance([start.lat, start.lng], [end.lat, end.lng]) / 1000).toFixed(2);
+      
+      document.getElementById('routeInfo').style.display = 'block';
+      let routeStatsHTML = `
+        <div style="margin-bottom: 5px;">
+          <strong>📍 From:</strong> ${locationSource || 'Current location'}
+        </div>
+        <div style="margin-bottom: 5px;">
+          <strong>📏 Distance:</strong> ${distance} km (straight line)
+        </div>
+      `;
+      document.getElementById('routeStats').innerHTML = routeStatsHTML;
+      document.getElementById('routeStatus').innerText = 'Showing direct route - no turn-by-turn directions available';
+    }
+
+    function clearNavigation() {
+      if (currentRoute) {
+        routeLayer.clearLayers();
+        currentRoute = null;
+      }
+      
+      if (navigationMarker) {
+        map.removeLayer(navigationMarker);
+        navigationMarker = null;
+      }
+      
+      navigationTarget = null;
+      document.getElementById('routeInfo').style.display = 'none';
+      document.getElementById('directionsContainer').style.display = 'none';
+      
+      // Reset navigation button if in progress
+      if (navigationActive) {
+        navigationActive = false;
+        document.getElementById('setDestination').disabled = false;
+        document.getElementById('setDestination').innerText = '📍 Set Destination';
+        map.getContainer().style.cursor = '';
+      }
+    }
+
+    // Update location info in navigation panel
+    function updateLocationInfo() {
+      let userLocation = null;
+      let locationSource = 'Waiting for location...';
+      
+      // Check if a specific origin phone is selected
+      if (navigationOriginPhone && phones[navigationOriginPhone] && phones[navigationOriginPhone].lat !== undefined) {
+        userLocation = { lat: phones[navigationOriginPhone].lat, lng: phones[navigationOriginPhone].lng };
+        locationSource = `
+          <div style="font-weight: bold; color: #155724;">Origin: 📱 ${navigationOriginPhone}</div>
+          <div>Lat: ${userLocation.lat.toFixed(6)}<br>Lng: ${userLocation.lng.toFixed(6)}</div>
+        `;
+      } else {
+        // Look for any available phone location as a default
+        for (const phoneId in phones) {
+          if (phones[phoneId] && phones[phoneId].lat !== undefined) {
+            userLocation = { lat: phones[phoneId].lat, lng: phones[phoneId].lng };
+            locationSource = `
+              <div style="font-style: italic;">Default: 📱 ${phoneId}</div>
+              <div>Lat: ${userLocation.lat.toFixed(6)}<br>Lng: ${userLocation.lng.toFixed(6)}</div>
+            `;
+            break;
+          }
+        }
+      }
+      
+      const locationCoordsDiv = document.getElementById('locationCoords');
+      if (locationCoordsDiv) {
+        locationCoordsDiv.innerHTML = locationSource;
+      }
+      
+      const centerBtn = document.getElementById('centerOnLocation');
+      if (centerBtn) {
+        centerBtn.disabled = !userLocation;
+      }
+    }
+
+    // Navigation event listeners
+    document.getElementById('setDestination').addEventListener('click', startNavigation);
+    document.getElementById('clearRoute').addEventListener('click', clearNavigation);
+    
+    document.getElementById('centerOnLocation').addEventListener('click', function() {
+      let userLocation = null;
+      
+      // Look for the user's phone in the tracked phones
+      for (const phoneId in phones) {
+        if (phones[phoneId] && phones[phoneId].lat !== undefined) {
+          userLocation = { lat: phones[phoneId].lat, lng: phones[phoneId].lng };
+          break;
+        }
+      }
+      
+      if (userLocation) {
+        map.setView([userLocation.lat, userLocation.lng], 16);
+      } else {
+        alert('No location available to center on.');
+      }
+    });
 
     // Distance measurement implementation
     let measuring = false;
@@ -1516,6 +2162,7 @@
     setInterval(loadPOIs, 5000);
     setInterval(loadMeasurements, 5000);
     setInterval(loadNotes, 5000);
+    setInterval(updateLocationInfo, 5000); // Update location info in navigation panel
 
     // Toggle functionality for split buttons
     document.getElementById('toggleMenu').addEventListener('click', () => {
@@ -1524,6 +2171,10 @@
     
     document.getElementById('toggleNotes').addEventListener('click', () => {
       document.getElementById('notesPanel').classList.toggle('hidden');
+    });
+
+    document.getElementById('toggleNavigation').addEventListener('click', () => {
+      document.getElementById('navigationPanel').classList.toggle('hidden');
     });
     
     // Add event listeners for phone label and direction arrow toggle buttons
