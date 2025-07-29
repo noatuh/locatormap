@@ -609,105 +609,7 @@
       margin-right: 8px;
     }
     
-    /* Mobile-specific styles */
-    body.mobile-mode {
-      font-size: 16px; /* Prevent zoom on iOS */
-    }
-    
-    body.mobile-mode #toggleButtons {
-      position: fixed;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 95%;
-      max-width: 100vw;
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 8px;
-      z-index: 1100;
-      bottom: auto;
-    }
-    
-    body.mobile-mode .toggle-btn {
-      padding: 12px 8px;
-      font-size: 12px;
-      min-width: auto;
-      text-align: center;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    
-    body.mobile-mode #controls {
-      position: fixed;
-      bottom: 10px;
-      right: 10px;
-      left: 10px;
-      top: auto;
-      width: auto;
-      max-height: 200px;
-      overflow-y: auto;
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 8px;
-      padding: 15px;
-      box-shadow: 0 -2px 10px rgba(0,0,0,0.2);
-    }
-    
-    body.mobile-mode #controls h4 {
-      margin: 0 0 10px 0;
-      font-size: 14px;
-      color: #333;
-    }
-    
-    body.mobile-mode #controls button,
-    body.mobile-mode #controls select {
-      padding: 8px 12px;
-      margin: 4px 2px;
-      font-size: 12px;
-      border-radius: 4px;
-    }
-    
-    body.mobile-mode #controls .drawing-controls {
-      display: none;
-    }
-    
-    body.mobile-mode #notesPanel,
-    body.mobile-mode #navigationPanel,
-    body.mobile-mode #weatherPanel,
-    body.mobile-mode #radioPanel {
-      width: 100%;
-      height: calc(100vh - 120px);
-      top: 110px;
-      transform: translateY(-100%);
-    }
-    
-    body.mobile-mode #notesPanel:not(.hidden),
-    body.mobile-mode #navigationPanel:not(.hidden),
-    body.mobile-mode #weatherPanel:not(.hidden),
-    body.mobile-mode #radioPanel:not(.hidden) {
-      transform: translateY(0);
-    }
-    
-    body.mobile-mode #notesPanel.hidden,
-    body.mobile-mode #radioPanel.hidden {
-      transform: translateY(-100%);
-    }
-    
-    body.mobile-mode #navigationPanel.hidden,
-    body.mobile-mode #weatherPanel.hidden {
-      transform: translateY(-100%);
-    }
-    
-    body.mobile-mode .panel-content {
-      padding: 10px;
-      font-size: 14px;
-    }
-    
-    body.mobile-mode .radio-grid {
-      grid-template-columns: 1fr;
-      gap: 6px;
-      max-height: calc(100vh - 250px);
-    }
+
     
     body.mobile-mode .radio-channel {
       padding: 6px;
@@ -816,12 +718,6 @@
       <h2>Access Required</h2>
       <p>Please enter the password to access the map:</p>
       <input type="password" id="passwordInput" placeholder="Enter password">
-      <div id="mobileCheckbox">
-        <label>
-          <input type="checkbox" id="mobileMode">
-          📱 I'm using a mobile device (optimize for vertical layout)
-        </label>
-      </div>
       <button id="passwordSubmit">Submit</button>
       <div id="passwordError">Incorrect password. Please try again.</div>
     </div>
@@ -1142,15 +1038,8 @@
       const passwordInput = document.getElementById('passwordInput');
       const passwordError = document.getElementById('passwordError');
       const passwordOverlay = document.getElementById('passwordOverlay');
-      const mobileMode = document.getElementById('mobileMode');
       
       if (passwordInput.value === correctPassword) {
-        // Check if mobile mode is enabled
-        if (mobileMode.checked) {
-          document.body.classList.add('mobile-mode');
-          console.log('Mobile mode enabled');
-        }
-        
         passwordOverlay.style.display = 'none';
         initializeMap();
       } else {
@@ -1174,13 +1063,27 @@
     
     // Focus on password input when page loads
     window.onload = function() {
-      document.getElementById('passwordInput').focus();
+      // Check if user wants to force desktop mode via URL parameter
+      const urlParams = new URLSearchParams(window.location.search);
+      const forceDesktop = urlParams.get('desktop') === 'true';
       
-      // Auto-detect mobile devices and pre-check the mobile mode checkbox
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      if (isMobile) {
-        document.getElementById('mobileMode').checked = true;
+      if (!forceDesktop) {
+        // Simple mobile detection: if height is greater than width, it's mobile
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        // Mobile device = height > width (portrait orientation)
+        const isMobile = viewportHeight > viewportWidth;
+        
+        // Redirect to minimap if mobile orientation is detected
+        if (isMobile) {
+          console.log('Mobile device detected (portrait orientation), redirecting to minimap');
+          window.location.href = '/minimap';
+          return;
+        }
       }
+      
+      document.getElementById('passwordInput').focus();
     };
     
     function initializeMap() {

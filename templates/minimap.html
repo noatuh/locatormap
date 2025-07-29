@@ -375,7 +375,7 @@
     .btn-danger { background: #dc3545; color: white; }
     .btn-info { background: #17a2b8; color: white; }
     
-    /* Hide elements not needed on mobile */
+    /* Hide elements not needed on minimap */
     .desktop-only {
       display: none;
     }
@@ -385,7 +385,7 @@
       touch-action: manipulation;
     }
     
-    /* Weather legend (smaller for mobile) */
+    /* Weather legend (smaller for minimap) */
     #weatherLegend {
       position: fixed;
       bottom: 100px;
@@ -444,11 +444,16 @@
   <!-- Password overlay -->
   <div id="passwordOverlay">
     <div id="passwordDialog">
-      <h2>🗺️ Mobile Map Access</h2>
-      <p>Enter password to access the mobile map:</p>
+      <h2>🗺️ Minimap Access</h2>
+      <p>Enter password to access the minimap:</p>
       <input type="password" id="passwordInput" placeholder="Enter password">
       <button id="passwordSubmit">Access Map</button>
       <div id="passwordError">Incorrect password. Please try again.</div>
+      <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+        <a href="/?desktop=true" style="color: #666; font-size: 12px; text-decoration: none;">
+          🖥️ Use Desktop Version Instead
+        </a>
+      </div>
     </div>
   </div>
 
@@ -460,7 +465,6 @@
     <button id="switchView">🗺️ Street</button>
     <button id="toggleRadio">📻 Radio</button>
     <button id="toggleRotation">🧭 Rotate</button>
-    <button id="returnToMain">🏠 Main Map</button>
     <button id="toggleMenu">📱 Devices</button>
   </div>
   
@@ -637,7 +641,7 @@
         center: [37.7749, -122.4194], 
         zoom: 5, 
         layers: [streetLayer],
-        zoomControl: false, // Remove default zoom control for cleaner mobile look
+        zoomControl: false, // Remove default zoom control for cleaner look
         bearing: 0 // Initial bearing
       });
       
@@ -998,9 +1002,6 @@
       // Panel toggles
       document.getElementById('toggleNotes').addEventListener('click', () => togglePanel('notesPanel'));
       document.getElementById('toggleRadio').addEventListener('click', () => togglePanel('radioPanel'));
-      document.getElementById('returnToMain').addEventListener('click', () => {
-        window.location.href = '/';
-      });
       document.getElementById('toggleRotation').addEventListener('click', () => {
         mapRotationEnabled = !mapRotationEnabled;
         const btn = document.getElementById('toggleRotation');
@@ -1039,7 +1040,7 @@
           return;
         }
 
-        const phoneId = prompt("Enter your name or device ID:", "mobile-user");
+        const phoneId = prompt("Enter your name or device ID:", "user");
         if (!phoneId) return;
 
         navigator.geolocation.getCurrentPosition(
@@ -1234,7 +1235,7 @@
       
       document.getElementById('refreshNotes').addEventListener('click', loadNotes);
       
-      // Weather functionality (simplified for mobile)
+      // Weather functionality (simplified)
       document.getElementById('getWeatherByGPS').addEventListener('click', () => {
         if (!navigator.geolocation) {
           alert("Geolocation not supported");
@@ -1243,7 +1244,7 @@
         
         navigator.geolocation.getCurrentPosition(
           (position) => {
-            // Simple weather display for mobile
+            // Simple weather display
             document.getElementById('weatherDisplay').innerHTML = `
               <div style="text-align: center; padding: 20px;">
                 <h3>Weather for Current Location</h3>
