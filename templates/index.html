@@ -65,6 +65,22 @@
       transform: translateX(100%);
     }
 
+    /* Right sidebar for weather */
+    #weatherPanel {
+      position: fixed; top: 0; right: 0; width: 320px; height: 100%;
+      background: rgba(255, 255, 255, 0.95); z-index: 1000;
+      box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+      display: flex; flex-direction: column;
+      transition: transform 0.3s ease;
+      transform: translateX(100%); /* Start hidden */
+    }
+    #weatherPanel.hidden {
+      transform: translateX(100%);
+    }
+    #weatherPanel:not(.hidden) {
+      transform: translateX(0);
+    }
+
     .panel-header {
       background: #343a40; color: white; padding: 15px;
       font-size: 18px; font-weight: bold; text-align: center;
@@ -103,7 +119,7 @@
     #toggleButtons {
       position: absolute; bottom: 15px; left: 50%;
       transform: translateX(-50%); z-index: 1100;
-      width: 520px; /* Increased width for the new button */
+      width: 640px; /* Increased width for the weather button */
       display: flex;
       align-items: center;
       gap: 10px;
@@ -540,6 +556,7 @@
     <button id="toggleMenu" class="toggle-btn">Toggle Menu</button>
     <button id="shareLocationBtn" class="toggle-btn">Share Location </button>
     <button id="toggleCompass" class="toggle-btn">Compass</button>
+    <button id="toggleWeather" class="toggle-btn">Weather Info</button>
   </div>
   
   <!-- Left sidebar for notes -->
@@ -607,6 +624,99 @@
         <div id="quickDestinations">
           <p style="font-size: 12px; color: #666; margin: 0;">Click on any POI pin to navigate there, or use "Set Destination" to choose a custom location.</p>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Weather panel -->
+  <div id="weatherPanel" class="hidden">
+    <div class="panel-header">
+      🌤️ Weather Info
+    </div>
+    <div class="panel-content">
+      <!-- Location Input -->
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #333;">Get Weather For:</label>
+        
+        <!-- Tracked Device Selector -->
+        <div style="margin-bottom: 8px;">
+          <select id="trackedDeviceSelect" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; margin-bottom: 4px;">
+            <option value="">Select a tracked device...</option>
+          </select>
+          <button id="getWeatherByDevice" style="width: 100%; padding: 6px; background: #17a2b8; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">📱 Get Weather for Selected Device</button>
+        </div>
+        
+        <!-- ZIP Code Input -->
+        <div style="display: flex; gap: 4px; margin-bottom: 8px;">
+          <input type="text" id="zipCodeInput" placeholder="ZIP code (e.g., 90210)" style="flex: 1; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
+          <button id="getWeatherByZip" style="padding: 6px 12px; background: #007bff; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">Get</button>
+        </div>
+        
+        <button id="getWeatherByGPS" style="width: 100%; padding: 8px; background: #28a745; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">📍 Use Current GPS Location</button>
+      </div>
+      
+      <!-- Weather Display -->
+      <div id="weatherDisplay" style="display: none;">
+        <div id="weatherLocation" style="font-weight: bold; font-size: 14px; color: #333; margin-bottom: 10px; text-align: center;"></div>
+        
+        <!-- Current Conditions -->
+        <div style="background: #f8f9fa; border-radius: 6px; padding: 12px; margin-bottom: 10px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <div>
+              <div id="weatherTemp" style="font-size: 24px; font-weight: bold; color: #333;"></div>
+              <div id="weatherDescription" style="font-size: 12px; color: #666; text-transform: capitalize;"></div>
+            </div>
+            <div id="weatherIcon" style="font-size: 32px;"></div>
+          </div>
+          
+          <div style="border-top: 1px solid #ddd; padding-top: 8px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 11px;">
+              <div>
+                <strong>Feels Like:</strong>
+                <div id="weatherFeelsLike" style="color: #666;"></div>
+              </div>
+              <div>
+                <strong>Humidity:</strong>
+                <div id="weatherHumidity" style="color: #666;"></div>
+              </div>
+              <div>
+                <strong>Wind:</strong>
+                <div id="weatherWind" style="color: #666;"></div>
+              </div>
+              <div>
+                <strong>Pressure:</strong>
+                <div id="weatherPressure" style="color: #666;"></div>
+              </div>
+              <div>
+                <strong>Visibility:</strong>
+                <div id="weatherVisibility" style="color: #666;"></div>
+              </div>
+              <div>
+                <strong>UV Index:</strong>
+                <div id="weatherUV" style="color: #666;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Additional Info -->
+        <div style="background: #e7f3ff; border-radius: 6px; padding: 10px; font-size: 11px;">
+          <div style="margin-bottom: 4px;">
+            <strong>🌅 Sunrise:</strong> <span id="weatherSunrise"></span>
+          </div>
+          <div>
+            <strong>🌇 Sunset:</strong> <span id="weatherSunset"></span>
+          </div>
+        </div>
+        
+        <div style="margin-top: 10px; text-align: center; font-size: 10px; color: #999;">
+          <div id="weatherLastUpdate"></div>
+          <div>Data from OpenWeatherMap</div>
+        </div>
+      </div>
+      
+      <!-- Weather Error Message -->
+      <div id="weatherError" style="display: none; background: #f8d7da; color: #721c24; padding: 10px; border-radius: 4px; font-size: 12px; margin-top: 10px;">
       </div>
     </div>
   </div>
@@ -718,8 +828,8 @@
     function initializeMap() {
     const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
     const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
-    // Weather radar layer from OpenWeatherMap (requires free API key)
-    const weatherLayer = L.tileLayer('https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=YOUR_API_KEY_HERE', {
+    // Weather radar layer from OpenWeatherMap
+    const weatherLayer = L.tileLayer('https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=e5a22a0e01663d82908ab1cf69e7c73d', {
       attribution: 'Weather data © OpenWeatherMap',
       opacity: 0.7
     });
@@ -1030,6 +1140,7 @@
           });
 
           updatePhoneList();
+          updateTrackedDeviceSelect(); // Update weather device selector
         })
         .catch(err => console.error("Failed to load phones:", err));
     }
@@ -2472,6 +2583,7 @@
     loadPOIs();
     loadMeasurements();
     loadNotes();
+    updateTrackedDeviceSelect(); // Initial population of weather device selector
     
     setInterval(loadDrawings, 10000);  // Reduced frequency to prevent conflicts
     setInterval(updateAllPhones, 5000);
@@ -2491,6 +2603,10 @@
 
     document.getElementById('toggleNavigation').addEventListener('click', () => {
       document.getElementById('navigationPanel').classList.toggle('hidden');
+    });
+
+    document.getElementById('toggleWeather').addEventListener('click', () => {
+      document.getElementById('weatherPanel').classList.toggle('hidden');
     });
     
     // Share location functionality
@@ -2541,8 +2657,330 @@
         enableHighAccuracy: true
       });
     });
+
+    // Weather functionality
+    const WEATHER_API_KEY = 'e5a22a0e01663d82908ab1cf69e7c73d'; // OpenWeatherMap API key
+    
+    function getWeatherByZip() {
+      const zipCode = document.getElementById('zipCodeInput').value.trim();
+      if (!zipCode) {
+        showWeatherError('Please enter a ZIP code');
+        return;
+      }
+      
+      // Extract just the numbers from ZIP code
+      const cleanZip = zipCode.replace(/[^\d]/g, '');
+      if (cleanZip.length !== 5) {
+        showWeatherError('Please enter a valid 5-digit ZIP code');
+        return;
+      }
+      
+      // Try both with and without country code for better compatibility
+      fetchWeatherData(`zip=${cleanZip},US`);
+    }
+    
+    function getWeatherByGPS() {
+      // Try to get location from tracked phones first
+      let userLocation = null;
+      
+      // Check if there's a followed phone
+      if (followedPhone && phones[followedPhone] && phones[followedPhone].lat !== undefined) {
+        userLocation = { lat: phones[followedPhone].lat, lng: phones[followedPhone].lng };
+      } else {
+        // Look for any available phone location
+        for (const phoneId in phones) {
+          if (phones[phoneId] && phones[phoneId].lat !== undefined) {
+            userLocation = { lat: phones[phoneId].lat, lng: phones[phoneId].lng };
+            break;
+          }
+        }
+      }
+      
+      if (userLocation) {
+        fetchWeatherData(`lat=${userLocation.lat}&lon=${userLocation.lng}`);
+      } else {
+        // Fallback to browser geolocation
+        if (navigator.geolocation) {
+          // Show loading state
+          document.getElementById('weatherLocation').textContent = 'Getting your location...';
+          document.getElementById('weatherDisplay').style.display = 'block';
+          
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              const lat = position.coords.latitude;
+              const lng = position.coords.longitude;
+              fetchWeatherData(`lat=${lat}&lon=${lng}`);
+            },
+            (error) => {
+              let message = 'Unable to get your location.';
+              
+              switch (error.code) {
+                case error.PERMISSION_DENIED:
+                  message = 'Location access denied. Please enable location services or use ZIP code.';
+                  break;
+                case error.POSITION_UNAVAILABLE:
+                  message = 'Location information is unavailable. Please try ZIP code.';
+                  break;
+                case error.TIMEOUT:
+                  message = 'Location request timed out. Please try ZIP code.';
+                  break;
+              }
+              
+              document.getElementById('weatherDisplay').style.display = 'none';
+              showWeatherError(message);
+            },
+            {
+              enableHighAccuracy: true,
+              timeout: 10000,
+              maximumAge: 300000 // 5 minutes
+            }
+          );
+        } else {
+          showWeatherError('Geolocation not supported by this browser. Please use ZIP code instead.');
+        }
+      }
+    }
+    
+    function getWeatherByDevice() {
+      const deviceSelect = document.getElementById('trackedDeviceSelect');
+      const selectedDeviceId = deviceSelect.value;
+      
+      if (!selectedDeviceId) {
+        showWeatherError('Please select a tracked device first.');
+        return;
+      }
+      
+      if (phones[selectedDeviceId] && phones[selectedDeviceId].lat !== undefined && phones[selectedDeviceId].lng !== undefined) {
+        const lat = phones[selectedDeviceId].lat;
+        const lng = phones[selectedDeviceId].lng;
+        
+        // Show loading state with device name
+        document.getElementById('weatherLocation').textContent = `Getting weather for ${selectedDeviceId}...`;
+        document.getElementById('weatherDisplay').style.display = 'block';
+        
+        fetchWeatherData(`lat=${lat}&lon=${lng}`);
+      } else {
+        showWeatherError(`No location data available for device "${selectedDeviceId}".`);
+      }
+    }
+    
+    function updateTrackedDeviceSelect() {
+      const deviceSelect = document.getElementById('trackedDeviceSelect');
+      const currentValue = deviceSelect.value;
+      
+      // Clear existing options except the first one
+      deviceSelect.innerHTML = '<option value="">Select a tracked device...</option>';
+      
+      // Add options for each tracked phone
+      const phoneIds = Object.keys(phones);
+      if (phoneIds.length > 0) {
+        phoneIds.forEach(phoneId => {
+          if (phones[phoneId] && phones[phoneId].lat !== undefined && phones[phoneId].lng !== undefined) {
+            const option = document.createElement('option');
+            option.value = phoneId;
+            option.textContent = `📱 ${phoneId}`;
+            deviceSelect.appendChild(option);
+          }
+        });
+        
+        // Restore previous selection if it still exists
+        if (currentValue && phones[currentValue]) {
+          deviceSelect.value = currentValue;
+        }
+        
+        // Enable the button
+        document.getElementById('getWeatherByDevice').disabled = false;
+      } else {
+        // No devices available
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'No tracked devices available';
+        option.disabled = true;
+        deviceSelect.appendChild(option);
+        
+        // Disable the button
+        document.getElementById('getWeatherByDevice').disabled = true;
+      }
+    }
+    
+    function fetchWeatherData(locationQuery) {
+      showWeatherError(''); // Clear any previous errors
+      document.getElementById('weatherDisplay').style.display = 'none';
+      
+      // Show loading state
+      document.getElementById('weatherLocation').textContent = 'Loading...';
+      document.getElementById('weatherDisplay').style.display = 'block';
+      
+      // Real OpenWeatherMap API call
+      const url = `https://api.openweathermap.org/data/2.5/weather?${locationQuery}&appid=${WEATHER_API_KEY}&units=imperial`;
+      
+      fetch(url)
+        .then(response => {
+          if (!response.ok) {
+            // Handle specific API error codes
+            let errorMessage = 'Unable to fetch weather data.';
+            switch (response.status) {
+              case 401:
+                errorMessage = 'Weather API authentication failed.';
+                break;
+              case 404:
+                errorMessage = 'Location not found. Please check your ZIP code or try a different location.';
+                break;
+              case 429:
+                errorMessage = 'Too many requests. Please wait a moment and try again.';
+                break;
+              case 500:
+              case 502:
+              case 503:
+                errorMessage = 'Weather service temporarily unavailable. Please try again later.';
+                break;
+              default:
+                errorMessage = `Weather service error (${response.status}). Please try again.`;
+            }
+            throw new Error(errorMessage);
+          }
+          return response.json();
+        })
+        .then(data => {
+          displayWeatherData(data);
+        })
+        .catch(error => {
+          console.error('Weather fetch error:', error);
+          
+          // Check if it's a network error or specific API error
+          if (error.message.includes('fetch')) {
+            showWeatherError('Network error. Please check your internet connection and try again.');
+          } else if (error.message.includes('authentication') || error.message.includes('API')) {
+            showWeatherError(error.message);
+          } else if (error.message.includes('not found')) {
+            showWeatherError(error.message);
+          } else {
+            // Try fallback with mock data if API fails
+            console.log('API failed, falling back to mock data for demonstration');
+            const mockWeatherData = {
+              name: locationQuery.includes('zip=') ? `ZIP ${locationQuery.split('=')[1].split(',')[0]}` : 'Current Location',
+              main: {
+                temp: Math.round(Math.random() * 40 + 40), // Random temp between 40-80°F
+                feels_like: Math.round(Math.random() * 40 + 40),
+                humidity: Math.round(Math.random() * 50 + 30),
+                pressure: Math.round(Math.random() * 100 + 1000)
+              },
+              weather: [
+                {
+                  main: ['Clear', 'Clouds', 'Rain', 'Snow'][Math.floor(Math.random() * 4)],
+                  description: 'partly cloudy',
+                  icon: '02d'
+                }
+              ],
+              wind: {
+                speed: Math.round(Math.random() * 20 + 5),
+                deg: Math.round(Math.random() * 360)
+              },
+              visibility: Math.round(Math.random() * 5000 + 5000),
+              sys: {
+                sunrise: Date.now() / 1000 - 6 * 3600, // 6 hours ago
+                sunset: Date.now() / 1000 + 6 * 3600   // 6 hours from now
+              },
+              dt: Date.now() / 1000
+            };
+            displayWeatherData(mockWeatherData);
+            showWeatherError('Using demo data - Weather API unavailable. Information shown is simulated for demonstration.');
+          }
+        });
+    }
+    
+    function displayWeatherData(data) {
+      // Determine if this weather is for a specific device
+      const deviceSelect = document.getElementById('trackedDeviceSelect');
+      const selectedDevice = deviceSelect.value;
+      
+      // Location - show device info if weather was requested for a specific device
+      let locationText = data.name;
+      if (selectedDevice && phones[selectedDevice]) {
+        locationText = `${data.name} (📱 ${selectedDevice})`;
+      }
+      document.getElementById('weatherLocation').textContent = locationText;
+      
+      // Temperature and description
+      document.getElementById('weatherTemp').textContent = `${Math.round(data.main.temp)}°F`;
+      document.getElementById('weatherDescription').textContent = data.weather[0].description;
+      
+      // Weather icon using OpenWeatherMap icon URL
+      const iconCode = data.weather[0].icon;
+      const iconImg = document.createElement('img');
+      iconImg.src = `https://openweathermap.org/img/wn/${iconCode}@2x.png`;
+      iconImg.alt = data.weather[0].description;
+      iconImg.style.width = '32px';
+      iconImg.style.height = '32px';
+      const iconDiv = document.getElementById('weatherIcon');
+      iconDiv.innerHTML = '';
+      iconDiv.appendChild(iconImg);
+      
+      // Details
+      document.getElementById('weatherFeelsLike').textContent = `${Math.round(data.main.feels_like)}°F`;
+      document.getElementById('weatherHumidity').textContent = `${data.main.humidity}%`;
+      
+      // Wind direction and speed
+      const windDirection = getWindDirection(data.wind.deg || 0);
+      document.getElementById('weatherWind').textContent = `${windDirection} ${Math.round(data.wind.speed || 0)} mph`;
+      
+      document.getElementById('weatherPressure').textContent = `${Math.round(data.main.pressure * 0.02953)} inHg`;
+      document.getElementById('weatherVisibility').textContent = data.visibility ? `${Math.round(data.visibility * 0.000621371)} mi` : 'N/A';
+      document.getElementById('weatherUV').textContent = 'N/A'; // UV index requires separate API call
+      
+      // Sunrise/Sunset
+      const sunrise = new Date(data.sys.sunrise * 1000);
+      const sunset = new Date(data.sys.sunset * 1000);
+      document.getElementById('weatherSunrise').textContent = sunrise.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+      document.getElementById('weatherSunset').textContent = sunset.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+      
+      // Last update
+      const lastUpdate = new Date(data.dt * 1000);
+      document.getElementById('weatherLastUpdate').textContent = `Updated: ${lastUpdate.toLocaleTimeString()}`;
+      
+      // Show weather display
+      document.getElementById('weatherDisplay').style.display = 'block';
+    }
+    
+    function getWindDirection(degrees) {
+      const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+      const index = Math.round(degrees / 22.5) % 16;
+      return directions[index];
+    }
+    
+    function showWeatherError(message) {
+      const errorDiv = document.getElementById('weatherError');
+      if (message) {
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+        
+        // Auto-hide non-critical errors after 8 seconds
+        if (!message.includes('demo data') && !message.includes('simulated')) {
+          setTimeout(() => {
+            if (errorDiv.textContent === message) {
+              errorDiv.style.display = 'none';
+            }
+          }, 8000);
+        }
+      } else {
+        errorDiv.style.display = 'none';
+      }
+    }
+    
+    // Weather event listeners
+    document.getElementById('getWeatherByZip').addEventListener('click', getWeatherByZip);
+    document.getElementById('getWeatherByGPS').addEventListener('click', getWeatherByGPS);
+    document.getElementById('getWeatherByDevice').addEventListener('click', getWeatherByDevice);
+    
+    // Allow Enter key in ZIP code input
+    document.getElementById('zipCodeInput').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        getWeatherByZip();
+      }
+    });
     
     } // End of initializeMap function
+
   // Compass toggle functionality
   let compassVisible = true;
   const compassElem = document.getElementById('compass');
