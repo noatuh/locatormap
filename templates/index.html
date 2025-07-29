@@ -643,18 +643,89 @@
     function initializeMap() {
     const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
     const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
+    // Weather radar layer from OpenWeatherMap (requires free API key)
+    const weatherLayer = L.tileLayer('https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=YOUR_API_KEY_HERE', {
+      attribution: 'Weather data © OpenWeatherMap',
+      opacity: 0.7
+    });
+    // Alternative free weather radar from RainViewer
+    const radarLayer = L.tileLayer('https://tilecache.rainviewer.com/v2/radar/{time}/256/{z}/{x}/{y}/2/1_1.png', {
+      attribution: 'Weather data © RainViewer',
+      opacity: 0.7
+    });
+    
     const map = L.map('map', { center: [37.7749, -122.4194], zoom: 5, layers: [streetLayer] });
     let currentBaseLayer = 'street';
+    let weatherVisible = false;
 
     document.getElementById("switchView").onclick = function () {
       if (currentBaseLayer === 'street') {
-        map.removeLayer(streetLayer); map.addLayer(satelliteLayer);
-        currentBaseLayer = 'satellite'; this.innerText = "Switch to Street View";
+        // Switch from Street to Satellite
+        map.removeLayer(streetLayer); 
+        map.addLayer(satelliteLayer);
+        currentBaseLayer = 'satellite'; 
+        this.innerText = "Switch to Weather Radar";
+      } else if (currentBaseLayer === 'satellite') {
+        // Switch from Satellite to Weather Radar
+        map.removeLayer(satelliteLayer);
+        // Add weather radar as base layer with street map underneath for context
+        map.addLayer(streetLayer);
+        getCurrentRadarTime().then(time => {
+          const currentRadarLayer = L.tileLayer(`https://tilecache.rainviewer.com/v2/radar/${time}/256/{z}/{x}/{y}/2/1_1.png`, {
+            attribution: 'Weather data © RainViewer',
+            opacity: 0.8
+          });
+          map.addLayer(currentRadarLayer);
+          // Store reference for removal later
+          window.currentRadarLayer = currentRadarLayer;
+        }).catch(error => {
+          console.error('Failed to load weather radar:', error);
+          // Fallback: use a static time
+          const fallbackTime = Math.floor(Date.now() / 1000) - 600;
+          const currentRadarLayer = L.tileLayer(`https://tilecache.rainviewer.com/v2/radar/${fallbackTime}/256/{z}/{x}/{y}/2/1_1.png`, {
+            attribution: 'Weather data © RainViewer',
+            opacity: 0.8
+          });
+          map.addLayer(currentRadarLayer);
+          window.currentRadarLayer = currentRadarLayer;
+        });
+        currentBaseLayer = 'weather';
+        this.innerText = "Switch to Street View";
       } else {
-        map.removeLayer(satelliteLayer); map.addLayer(streetLayer);
-        currentBaseLayer = 'street'; this.innerText = "Switch to Satellite";
+        // Switch from Weather Radar back to Street
+        if (window.currentRadarLayer) {
+          map.removeLayer(window.currentRadarLayer);
+          window.currentRadarLayer = null;
+        }
+        // Street layer should already be there as base, no need to add again
+        currentBaseLayer = 'street'; 
+        this.innerText = "Switch to Satellite";
       }
     };
+
+    // Function to get current radar time from RainViewer API
+    function getCurrentRadarTime() {
+      return fetch('https://api.rainviewer.com/public/weather-maps.json')
+        .then(response => response.json())
+        .then(data => {
+          console.log('RainViewer API response:', data);
+          // Get the most recent radar frame from past data
+          if (data.radar && data.radar.past && data.radar.past.length > 0) {
+            return data.radar.past[data.radar.past.length - 1].time;
+          }
+          // Also check nowcast if available
+          if (data.radar && data.radar.nowcast && data.radar.nowcast.length > 0) {
+            return data.radar.nowcast[data.radar.nowcast.length - 1].time;
+          }
+          // Fallback to a recent timestamp if API fails
+          console.warn('No radar data found, using fallback timestamp');
+          return Math.floor(Date.now() / 1000) - 600; // 10 minutes ago
+        })
+        .catch(error => {
+          console.error('Error fetching radar time:', error);
+          return Math.floor(Date.now() / 1000) - 600; // 10 minutes ago
+        });
+    }
 
     let drawing = false, currentLine = null, color = document.getElementById("colorPicker").value;
     let drawnItems = [];
