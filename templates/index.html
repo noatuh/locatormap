@@ -1054,6 +1054,58 @@
       updatePhoneList();
     }
 
+    function removeSpecificPhone(phoneId) {
+      if (confirm(`Are you sure you want to remove device "${phoneId}" from tracking? This cannot be undone.`)) {
+        // Remove from map
+        if (phones[phoneId]) {
+          if (phones[phoneId].marker) map.removeLayer(phones[phoneId].marker);
+          if (phones[phoneId].label) map.removeLayer(phones[phoneId].label);
+          if (phones[phoneId].directionArrow) map.removeLayer(phones[phoneId].directionArrow);
+          
+          // If we were following this phone, stop following
+          if (followedPhone === phoneId) {
+            followedPhone = null;
+            console.log(`Stopped following phone ${phoneId} (device removed)`);
+          }
+          
+          // If this was the navigation origin, clear it
+          if (navigationOriginPhone === phoneId) {
+            clearNavigationOrigin();
+            console.log(`Cleared navigation origin ${phoneId} (device removed)`);
+          }
+          
+          // Remove from local phones object
+          delete phones[phoneId];
+        }
+        
+        // Get all remaining phones and send to server
+        const remainingPhones = {};
+        Object.keys(phones).forEach(id => {
+          if (phones[id] && phones[id].lat !== undefined && phones[id].lng !== undefined) {
+            remainingPhones[id] = {
+              lat: phones[id].lat,
+              lng: phones[id].lng,
+              heading: phones[id].heading,
+              alt: phones[id].alt
+            };
+          }
+        });
+        
+        // Send updated phones list to server
+        fetch("/save_phones", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(remainingPhones)
+        })
+        .then(res => res.json())
+        .then(data => {
+          console.log(`Removed phone ${phoneId} from server`);
+          updatePhoneList(); // Update the UI
+        })
+        .catch(err => console.error("Error removing phone:", err));
+      }
+    }
+
     function createDirectionArrowIcon(heading) {
       return L.divIcon({
         className: 'direction-arrow',
@@ -1151,10 +1203,11 @@
           text.style.marginBottom = '6px';
           text.style.fontWeight = followedPhone === id ? 'bold' : 'normal';
           
-          // Button container
-          const buttonContainer = document.createElement('div');
-          buttonContainer.style.display = 'flex';
-          buttonContainer.style.gap = '4px';
+          // Button container - First row (main actions)
+          const buttonContainer1 = document.createElement('div');
+          buttonContainer1.style.display = 'flex';
+          buttonContainer1.style.gap = '4px';
+          buttonContainer1.style.marginBottom = '4px';
           
           // Center map button
           const centerBtn = document.createElement('button');
@@ -1195,12 +1248,33 @@
           navBtn.style.cursor = 'pointer';
           navBtn.onclick = () => setNavigationOrigin(id);
           
-          buttonContainer.appendChild(centerBtn);
-          buttonContainer.appendChild(followBtn);
-          buttonContainer.appendChild(navBtn);
+          buttonContainer1.appendChild(centerBtn);
+          buttonContainer1.appendChild(followBtn);
+          buttonContainer1.appendChild(navBtn);
+          
+          // Button container - Second row (delete action)
+          const buttonContainer2 = document.createElement('div');
+          buttonContainer2.style.display = 'flex';
+          buttonContainer2.style.gap = '4px';
+          
+          // Delete this phone button
+          const deleteBtn = document.createElement('button');
+          deleteBtn.textContent = '🗑️ Remove Device';
+          deleteBtn.style.flex = '1';
+          deleteBtn.style.padding = '4px 8px';
+          deleteBtn.style.fontSize = '11px';
+          deleteBtn.style.backgroundColor = '#dc3545';
+          deleteBtn.style.color = 'white';
+          deleteBtn.style.border = 'none';
+          deleteBtn.style.borderRadius = '3px';
+          deleteBtn.style.cursor = 'pointer';
+          deleteBtn.onclick = () => removeSpecificPhone(id);
+          
+          buttonContainer2.appendChild(deleteBtn);
           
           entry.appendChild(text);
-          entry.appendChild(buttonContainer);
+          entry.appendChild(buttonContainer1);
+          entry.appendChild(buttonContainer2);
           phoneEntries.appendChild(entry);
         });
       }
