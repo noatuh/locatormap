@@ -664,6 +664,10 @@
     
     <div id="phoneList">
       <h4>Tracked Phones</h4>
+      <div id="followStatus" style="font-size: 12px; color: #666; margin-bottom: 8px; padding: 4px; background: rgba(255,255,255,0.8); border-radius: 3px; display: none;">
+        <strong>🎯 Following:</strong> <span id="followedPhoneName"></span>
+        <button id="stopFollowingBtn" style="margin-left: 8px; padding: 2px 6px; font-size: 10px; background: #dc3545; color: white; border: none; border-radius: 2px; cursor: pointer;">Stop</button>
+      </div>
       <div id="phoneEntries"></div>
       <button id="clearAllPhones">Clear All Phones</button>
     </div>
@@ -932,6 +936,7 @@
     }
 
     const phones = {};
+    let followedPhone = null; // Track which phone we're following
 
     function updateAllPhones() {
       return fetch("/load_phones")
@@ -947,11 +952,18 @@
 
             if (phones[id] && phones[id].marker) {
               // Update existing phone position
+              const oldLat = phones[id].lat;
+              const oldLng = phones[id].lng;
               phones[id].lat = lat; // Store lat
               phones[id].lng = lng; // Store lng
               phones[id].marker.setLatLng(latlng);
               phones[id].label.setLatLng(latlng);
               phones[id].alt = alt; // Store altitude
+
+              // If this phone is being followed and position changed, center map on it
+              if (followedPhone === id && (oldLat !== lat || oldLng !== lng)) {
+                map.setView([lat, lng], map.getZoom()); // Keep current zoom level
+              }
 
               // Only update heading if a new valid one is received
               if (typeof heading === 'number') {
@@ -1006,6 +1018,13 @@
               if (phones[id].marker) map.removeLayer(phones[id].marker);
               if (phones[id].label) map.removeLayer(phones[id].label);
               if (phones[id].directionArrow) map.removeLayer(phones[id].directionArrow);
+              
+              // If we were following this phone, stop following
+              if (followedPhone === id) {
+                followedPhone = null;
+                console.log(`Stopped following phone ${id} (device disconnected)`);
+              }
+              
               delete phones[id];
             }
           });
@@ -1013,6 +1032,26 @@
           updatePhoneList();
         })
         .catch(err => console.error("Failed to load phones:", err));
+    }
+
+    function toggleFollowPhone(phoneId) {
+      if (followedPhone === phoneId) {
+        // Stop following this phone
+        followedPhone = null;
+        console.log(`Stopped following phone: ${phoneId}`);
+      } else {
+        // Start following this phone
+        followedPhone = phoneId;
+        console.log(`Now following phone: ${phoneId}`);
+        
+        // Immediately center on the phone
+        if (phones[phoneId] && phones[phoneId].lat !== undefined && phones[phoneId].lng !== undefined) {
+          map.setView([phones[phoneId].lat, phones[phoneId].lng], Math.max(map.getZoom(), 16));
+        }
+      }
+      
+      // Update the phone list display to reflect the change
+      updatePhoneList();
     }
 
     function createDirectionArrowIcon(heading) {
@@ -1056,7 +1095,28 @@
 
     function updatePhoneList() {
       const phoneEntries = document.getElementById('phoneEntries');
+      const followStatus = document.getElementById('followStatus');
+      const followedPhoneName = document.getElementById('followedPhoneName');
+      
       phoneEntries.innerHTML = '';
+      
+      // Update follow status display
+      if (followedPhone) {
+        followStatus.style.display = 'block';
+        followedPhoneName.textContent = followedPhone;
+        
+        // Add event listener for stop following button
+        const stopBtn = document.getElementById('stopFollowingBtn');
+        if (stopBtn) {
+          stopBtn.onclick = () => {
+            followedPhone = null;
+            updatePhoneList();
+          };
+        }
+      } else {
+        followStatus.style.display = 'none';
+      }
+      
       const ids = Object.keys(phones);
       if (ids.length === 0) {
         phoneEntries.innerHTML = '<p>No phones being tracked</p>';
@@ -1068,12 +1128,16 @@
           entry.style.flexDirection = 'column';
           entry.style.marginBottom = '8px';
           entry.style.padding = '8px';
-          entry.style.backgroundColor = 'rgba(240, 240, 240, 0.8)';
+          entry.style.backgroundColor = followedPhone === id ? 'rgba(40, 167, 69, 0.2)' : 'rgba(240, 240, 240, 0.8)';
           entry.style.borderRadius = '4px';
+          entry.style.border = followedPhone === id ? '2px solid #28a745' : 'none';
           
           // Phone info text
           const text = document.createElement('div');
           let displayText = `📱 ${id}`;
+          if (followedPhone === id) {
+            displayText += ' 🎯'; // Target icon for followed phone
+          }
           if (typeof phones[id].heading === 'number') {
             const heading = Math.round(phones[id].heading);
             const cardinalDir = getCardinalDirection(heading);
@@ -1085,6 +1149,7 @@
           text.textContent = displayText;
           text.style.fontSize = '13px';
           text.style.marginBottom = '6px';
+          text.style.fontWeight = followedPhone === id ? 'bold' : 'normal';
           
           // Button container
           const buttonContainer = document.createElement('div');
@@ -1104,6 +1169,19 @@
           centerBtn.style.cursor = 'pointer';
           centerBtn.onclick = () => centerOnPhone(id);
           
+          // Follow/Unfollow button
+          const followBtn = document.createElement('button');
+          followBtn.textContent = followedPhone === id ? 'Unfollow' : 'Follow';
+          followBtn.style.flex = '1';
+          followBtn.style.padding = '4px 8px';
+          followBtn.style.fontSize = '11px';
+          followBtn.style.backgroundColor = followedPhone === id ? '#dc3545' : '#17a2b8';
+          followBtn.style.color = 'white';
+          followBtn.style.border = 'none';
+          followBtn.style.borderRadius = '3px';
+          followBtn.style.cursor = 'pointer';
+          followBtn.onclick = () => toggleFollowPhone(id);
+          
           // Navigate from button
           const navBtn = document.createElement('button');
           navBtn.textContent = 'Nav From';
@@ -1118,6 +1196,7 @@
           navBtn.onclick = () => setNavigationOrigin(id);
           
           buttonContainer.appendChild(centerBtn);
+          buttonContainer.appendChild(followBtn);
           buttonContainer.appendChild(navBtn);
           
           entry.appendChild(text);
@@ -1272,10 +1351,11 @@
           if (phones[id].directionArrow) map.removeLayer(phones[id].directionArrow);
         });
         
-        // Clear phones object
+        // Clear phones object and reset follow mode
         Object.keys(phones).forEach(id => {
           delete phones[id];
         });
+        followedPhone = null; // Reset follow mode
         
         // Send request to clear phones on server
         fetch("/save_phones", {
