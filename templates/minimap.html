@@ -416,6 +416,28 @@
       color: #333;
       font-weight: 500;
     }
+    
+    /* Styles for minimap data display */
+    .measurement-label {
+      background: rgba(255, 107, 0, 0.9);
+      color: white;
+      border: 1px solid #fff;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: bold;
+      text-align: center;
+      padding: 2px 4px;
+      white-space: nowrap;
+    }
+
+    .poi-marker-mini {
+      filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.5));
+    }
+
+    .leaflet-popup-content {
+      margin: 8px 10px;
+      line-height: 1.4;
+    }
   </style>
 </head>
 <body>
@@ -1259,9 +1281,210 @@
       // Initialize
       updateAllPhones();
       loadNotes();
+      loadDrawings();
+      loadMeasurements();
+      loadPOIs();
+      loadCurrentRoute();
       
       // Update phones periodically
       setInterval(updateAllPhones, 3000);
+      
+      // Update other data periodically (less frequently)
+      setInterval(() => {
+        loadDrawings();
+        loadMeasurements();
+        loadPOIs();
+        loadCurrentRoute();
+      }, 10000); // Every 10 seconds
+      
+      // Load drawings from main map
+      let drawnItems = [];
+      let lastLoadedDrawings = [];
+      
+      function loadDrawings() {
+        fetch("/load")
+          .then(res => res.json())
+          .then(data => {
+            // Only update if the data has actually changed
+            if (JSON.stringify(data) !== JSON.stringify(lastLoadedDrawings)) {
+              drawnItems.forEach(line => map.removeLayer(line));
+              drawnItems = [];
+              
+              data.forEach(feature => {
+                const color = feature.properties?.color || 'red';
+                const line = L.geoJSON(feature, { 
+                  style: { color: color, weight: 3, opacity: 0.7 }
+                }).addTo(map);
+                
+                drawnItems.push(line);
+              });
+              
+              lastLoadedDrawings = data;
+            }
+          })
+          .catch(err => console.error("Error loading drawings:", err));
+      }
+      
+      // Load measurements from main map
+      let measurements = [];
+      let measurementsLayer = L.layerGroup().addTo(map);
+      
+      function loadMeasurements() {
+        fetch("/load_measurements")
+          .then(res => res.json())
+          .then(data => {
+            measurementsLayer.clearLayers();
+            measurements = [];
+            
+            data.forEach(measurement => {
+              const line = L.polyline([measurement.start, measurement.end], {
+                color: '#FF6B00',
+                weight: 3,
+                opacity: 0.7,
+                dashArray: '5,5'
+              }).addTo(measurementsLayer);
+              
+              // Add distance label
+              const midpoint = L.latLng(
+                (measurement.start[0] + measurement.end[0]) / 2,
+                (measurement.start[1] + measurement.end[1]) / 2
+              );
+              
+              const label = L.marker(midpoint, {
+                icon: L.divIcon({
+                  className: 'measurement-label',
+                  html: `${measurement.distanceMeters.toFixed(0)}m`,
+                  iconSize: [60, 20],
+                  iconAnchor: [30, 10]
+                })
+              }).addTo(measurementsLayer);
+              
+              measurements.push({ ...measurement, line, label });
+            });
+          })
+          .catch(err => console.error("Error loading measurements:", err));
+      }
+      
+      // Load POIs from main map
+      let pins = [];
+      let pinsLayer = L.layerGroup().addTo(map);
+      
+      function loadPOIs() {
+        fetch("/load_pois")
+          .then(res => res.json())
+          .then(data => {
+            pinsLayer.clearLayers();
+            pins = [];
+            
+            data.forEach(poi => {
+              const marker = L.marker([poi.lat, poi.lng], {
+                icon: L.divIcon({
+                  className: 'poi-marker-mini',
+                  html: `<svg width="20" height="30" viewBox="0 0 24 36" fill="${poi.color}" 
+                         xmlns="http://www.w3.org/2000/svg">
+                         <path d="M12 0C5.4 0 0 5.4 0 12c0 7.2 12 24 12 24s12-16.8 12-24c0-6.6-5.4-12-12-12z" 
+                         stroke="#000" stroke-width="1"/>
+                         </svg>`,
+                  iconSize: [20, 30],
+                  iconAnchor: [10, 30]
+                })
+              }).addTo(pinsLayer);
+              
+              marker.bindPopup(`
+                <div style="font-size: 12px;">
+                  <div style="font-weight: bold;">${poi.title}</div>
+                  ${poi.description ? `<div style="margin-top: 4px;">${poi.description}</div>` : ''}
+                </div>
+              `);
+              
+              pins.push(marker);
+            });
+          })
+          .catch(err => console.error("Error loading POIs:", err));
+      }
+      
+      // Load current navigation route from main map
+      let currentRoute = null;
+      let currentRouteMarkers = [];
+      let routeLayer = L.layerGroup().addTo(map);
+      
+      function loadCurrentRoute() {
+        fetch("/load_current_route")
+          .then(res => res.json())
+          .then(data => {
+            // Clear existing route
+            routeLayer.clearLayers();
+            currentRouteMarkers.forEach(marker => map.removeLayer(marker));
+            currentRouteMarkers = [];
+            currentRoute = null;
+            
+            if (data && data.route && data.route.features && data.route.features.length > 0) {
+              const feature = data.route.features[0];
+              const coordinates = feature.geometry.coordinates;
+              const properties = feature.properties || {};
+              
+              // Convert coordinates to Leaflet format [lat, lng]
+              const latlngs = coordinates.map(coord => [coord[1], coord[0]]);
+              
+              // Get transport mode and style route accordingly
+              const transportMode = data.transportMode || 'walking';
+              let routeColor = '#007bff';
+              let routeWeight = 4;
+              
+              switch(transportMode) {
+                case 'walking':
+                  routeColor = '#28a745';
+                  routeWeight = 3;
+                  break;
+                case 'driving':
+                  routeColor = '#dc3545';
+                  routeWeight = 4;
+                  break;
+                case 'cycling':
+                  routeColor = '#fd7e14';
+                  routeWeight = 3;
+                  break;
+              }
+              
+              // Create route line
+              currentRoute = L.polyline(latlngs, {
+                color: routeColor,
+                weight: routeWeight,
+                opacity: 0.8,
+                dashArray: properties.fallback ? '5,5' : null
+              }).addTo(routeLayer);
+              
+              // Add start marker (green)
+              if (data.start) {
+                const startMarker = L.marker([data.start.lat, data.start.lng], {
+                  icon: L.divIcon({
+                    className: 'route-marker-start',
+                    html: `<div style="width: 16px; height: 16px; background-color: #28a745; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"></div>`,
+                    iconSize: [16, 16],
+                    iconAnchor: [8, 8]
+                  })
+                }).addTo(routeLayer);
+                
+                currentRouteMarkers.push(startMarker);
+              }
+              
+              // Add end marker (red)
+              if (data.end) {
+                const endMarker = L.marker([data.end.lat, data.end.lng], {
+                  icon: L.divIcon({
+                    className: 'route-marker-end',
+                    html: `<div style="width: 16px; height: 16px; background-color: #dc3545; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"></div>`,
+                    iconSize: [16, 16],
+                    iconAnchor: [8, 8]
+                  })
+                }).addTo(routeLayer);
+                
+                currentRouteMarkers.push(endMarker);
+              }
+            }
+          })
+          .catch(err => console.error("Error loading current route:", err));
+      }
     }
   </script>
 </body>

@@ -527,6 +527,39 @@ def clear_radio_frequencies():
         json.dump(default_frequencies, f)
     return jsonify({"status": "cleared"})
 
+@app.route("/save_current_route", methods=["POST"])
+def save_current_route():
+    """Save the current active navigation route"""
+    try:
+        route_data = request.get_json()
+        with open("current_route.json", "w") as f:
+            json.dump(route_data, f)
+        return jsonify({"status": "saved"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/load_current_route", methods=["GET"])
+def load_current_route():
+    """Load the current active navigation route"""
+    try:
+        if os.path.exists("current_route.json"):
+            with open("current_route.json", "r") as f:
+                route_data = json.load(f)
+            return jsonify(route_data)
+        return jsonify(None)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/clear_current_route", methods=["POST"])
+def clear_current_route():
+    """Clear the current active navigation route"""
+    try:
+        if os.path.exists("current_route.json"):
+            os.remove("current_route.json")
+        return jsonify({"status": "cleared"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == "__main__":
     print("Starting main server on port 5050...")
     app.run(debug=True, host="0.0.0.0", port=5050)

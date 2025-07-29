@@ -2180,54 +2180,6 @@
       }
     }
 
-    // Pin placement mode
-    document.getElementById("startPlacingPin").addEventListener('click', function() {
-      placingPin = true;
-      this.disabled = true;
-      map.getContainer().style.cursor = 'crosshair';
-      
-      // One-time click handler for pin placement
-      const clickHandler = function(e) {
-        document.getElementById("pinDialog").style.display = "block";
-        document.getElementById("startPlacingPin").disabled = false;
-        
-        document.getElementById("savePin").onclick = function() {
-          const title = document.getElementById("pinTitle").value;
-          if (!title) {
-            alert("Please enter a title for the pin");
-            return;
-          }
-          
-          const poi = {
-            id: Date.now().toString(), // Generate unique ID
-            lat: e.latlng.lat,
-            lng: e.latlng.lng,
-            title: title,
-            description: document.getElementById("pinDescription").value,
-            color: document.getElementById("pinColor").value
-          };
-          
-          savePOI(poi);
-          
-          // Reset UI
-          document.getElementById("pinDialog").style.display = "none";
-          document.getElementById("pinTitle").value = "";
-          document.getElementById("pinDescription").value = "";
-          map.getContainer().style.cursor = '';
-        };
-        
-        document.getElementById("cancelPin").onclick = function() {
-          document.getElementById("pinDialog").style.display = "none";
-          map.getContainer().style.cursor = '';
-        };
-        
-        placingPin = false;
-        map.off('click', clickHandler);
-      };
-      
-      map.once('click', clickHandler);
-    });
-
     // Toggle pins visibility
     document.getElementById("togglePins").addEventListener('click', function() {
       pinsVisible = !pinsVisible;
@@ -2240,15 +2192,13 @@
       }
     });
 
-    document.getElementById("clearAllPins").addEventListener('click', clearAllPins);
-    document.getElementById("clearAllPhones").addEventListener('click', clearAllPhones);
-    document.getElementById("toggleLabels").addEventListener('click', togglePhoneLabels);
-    document.getElementById("toggleDirectionArrows").addEventListener('click', toggleDirectionArrows);
-
-    // Navigation implementation
+    // ===== NAVIGATION FUNCTIONALITY =====
+    
+    // Shared route variables
+    let currentRoute = null;
+    let currentRouteData = null; // Store the full route data for comparison
     let navigationActive = false;
     let navigationTarget = null;
-    let currentRoute = null;
     let navigationMarker = null;
     let routeLayer = L.layerGroup().addTo(map);
 
@@ -2336,11 +2286,11 @@
       .catch(error => {
         console.error('Error getting route:', error);
         // Fallback: draw straight line
-        drawStraightLineRoute(userLocation, destination, locationSource);
+        drawStraightLineRoute(userLocation, destination, locationSource, transportMode);
       });
     }
 
-    function displayRoute(routeData, start, end, locationSource) {
+    function displayRoute(routeData, start, end, locationSource, saveRoute = true, showInfo = true) {
       // Clear existing route
       routeLayer.clearLayers();
       
@@ -2397,65 +2347,88 @@
           duration = Math.round(properties.time / 60000);
         }
         
-        // Show navigation info
-        document.getElementById('routeInfo').style.display = 'block';
-        
-        const transportEmoji = {
-          walking: '🚶',
-          driving: '🚗',
-          cycling: '🚴'
-        };
-        
-        let routeStatsHTML = `
-          <div style="margin-bottom: 5px;">
-            <strong>📍 From:</strong> ${locationSource || 'Current location'}
-          </div>
-          <div style="margin-bottom: 5px;">
-            <strong>${transportEmoji[transportMode]} Distance:</strong> ${distance} km
-          </div>
-        `;
-        
-        if (duration > 0) {
-          const hours = Math.floor(duration / 60);
-          const mins = duration % 60;
-          let durationText = '';
-          if (hours > 0) {
-            durationText = `${hours}h ${mins}m`;
-          } else {
-            durationText = `${mins}m`;
-          }
-          routeStatsHTML += `
+        // Only show route info and fit bounds if requested
+        if (showInfo) {
+          // Show navigation info
+          document.getElementById('routeInfo').style.display = 'block';
+          
+          const transportEmoji = {
+            walking: '🚶',
+            driving: '🚗',
+            cycling: '🚴'
+          };
+          
+          let routeStatsHTML = `
             <div style="margin-bottom: 5px;">
-              <strong>⏱️ Duration:</strong> ${durationText}
+              <strong>📍 From:</strong> ${locationSource || 'Current location'}
+            </div>
+            <div style="margin-bottom: 5px;">
+              <strong>${transportEmoji[transportMode]} Distance:</strong> ${distance} km
             </div>
           `;
+          
+          if (duration > 0) {
+            const hours = Math.floor(duration / 60);
+            const mins = duration % 60;
+            let durationText = '';
+            if (hours > 0) {
+              durationText = `${hours}h ${mins}m`;
+            } else {
+              durationText = `${mins}m`;
+            }
+            routeStatsHTML += `
+              <div style="margin-bottom: 5px;">
+                <strong>⏱️ Duration:</strong> ${durationText}
+              </div>
+            `;
+          }
+          
+          document.getElementById('routeStats').innerHTML = routeStatsHTML;
+          
+          // Show service used
+          const serviceUsed = routeData.service_used || properties.service || 'Unknown';
+          let statusMessage = '';
+          
+          if (properties.fallback) {
+            statusMessage = '⚠️ Showing straight-line route (routing service unavailable)';
+            document.getElementById('routeStatus').style.color = '#ffc107';
+          } else {
+            statusMessage = `✅ Route provided by ${serviceUsed}`;
+            document.getElementById('routeStatus').style.color = '#28a745';
+          }
+          
+          document.getElementById('routeStatus').innerText = statusMessage;
+          
+          // Display turn-by-turn directions if available
+          displayDirections(properties);
+          
+          // Fit map to show the route
+          const routeBounds = currentRoute.getBounds();
+          const startMarker = L.latLng(start.lat, start.lng);
+          const endMarker = L.latLng(end.lat, end.lng);
+          const bounds = L.latLngBounds([startMarker, endMarker]).extend(routeBounds);
+          map.fitBounds(bounds, { padding: [20, 20] });
         }
         
-        document.getElementById('routeStats').innerHTML = routeStatsHTML;
-        
-        // Show service used
-        const serviceUsed = routeData.service_used || properties.service || 'Unknown';
-        let statusMessage = '';
-        
-        if (properties.fallback) {
-          statusMessage = '⚠️ Showing straight-line route (routing service unavailable)';
-          document.getElementById('routeStatus').style.color = '#ffc107';
-        } else {
-          statusMessage = `✅ Route provided by ${serviceUsed}`;
-          document.getElementById('routeStatus').style.color = '#28a745';
+        // Save the current route so minimap can display it
+        if (saveRoute) {
+          const routeToSave = {
+            route: routeData,
+            start: start,
+            end: end,
+            transportMode: transportMode,
+            timestamp: Date.now()
+          };
+          
+          // Store the route data locally for comparison
+          currentRouteData = routeToSave;
+          
+          fetch('/save_current_route', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(routeToSave)
+          }).catch(err => console.error('Failed to save route:', err));
         }
-        
-        document.getElementById('routeStatus').innerText = statusMessage;
-        
-        // Display turn-by-turn directions if available
-        displayDirections(properties);
-        
-        // Fit map to show the route
-        const routeBounds = currentRoute.getBounds();
-        const startMarker = L.latLng(start.lat, start.lng);
-        const endMarker = L.latLng(end.lat, end.lng);
-        const bounds = L.latLngBounds([startMarker, endMarker]).extend(routeBounds);
-        map.fitBounds(bounds, { padding: [20, 20] });
         
       } else {
         // Fallback: draw straight line
@@ -2504,10 +2477,11 @@
       }
     }
 
-    function drawStraightLineRoute(start, end, locationSource) {
+    function drawStraightLineRoute(start, end, locationSource, transportMode = 'walking') {
       routeLayer.clearLayers();
       
-      currentRoute = L.polyline([[start.lat, start.lng], [end.lat, end.lng]], {
+      const latlngs = [[start.lat, start.lng], [end.lat, end.lng]];
+      currentRoute = L.polyline(latlngs, {
         color: '#ff4444',
         weight: 3,
         opacity: 0.6,
@@ -2528,6 +2502,33 @@
       `;
       document.getElementById('routeStats').innerHTML = routeStatsHTML;
       document.getElementById('routeStatus').innerText = 'Showing direct route - no turn-by-turn directions available';
+
+      // Save the straight line route for the minimap
+      const routeToSave = {
+        route: {
+          features: [{
+            geometry: {
+              coordinates: latlngs.map(ll => [ll[1], ll[0]]) // convert to [lng, lat]
+            },
+            properties: {
+              fallback: true
+            }
+          }]
+        },
+        start: start,
+        end: end,
+        transportMode: transportMode,
+        timestamp: Date.now()
+      };
+      
+      // Store the route data locally for comparison
+      currentRouteData = routeToSave;
+      
+      fetch('/save_current_route', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(routeToSave)
+      }).catch(err => console.error('Failed to save straight line route:', err));
     }
 
     function clearNavigation() {
@@ -2542,6 +2543,7 @@
       }
       
       navigationTarget = null;
+      currentRouteData = null; // Clear stored route data
       document.getElementById('routeInfo').style.display = 'none';
       document.getElementById('directionsContainer').style.display = 'none';
       
@@ -2552,6 +2554,52 @@
         document.getElementById('setDestination').innerText = '📍 Set Destination';
         map.getContainer().style.cursor = '';
       }
+      
+      // Clear the saved route so minimap stops displaying it
+      fetch('/clear_current_route', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      }).catch(err => console.error('Failed to clear route:', err));
+    }
+
+    // Load the currently saved route from the server
+    function loadCurrentRoute() {
+      fetch('/load_current_route')
+        .then(response => {
+          if (response.ok) {
+            return response.json();
+          }
+          return null;
+        })
+        .then(data => {
+          if (data && data.route) {
+            // Check if this is a new route or updated route
+            if (!currentRouteData || currentRouteData.timestamp !== data.timestamp) {
+              console.log('Loading shared route from another client');
+              
+              // Don't show route info panel for automatically loaded routes unless user is navigating
+              const showInfo = navigationActive || (currentRouteData && currentRouteData.timestamp);
+              
+              // Store the route data
+              currentRouteData = data;
+              
+              // Display the route without saving it back to server
+              displayRoute(data.route, data.start, data.end, `Shared Route from ${new Date(data.timestamp).toLocaleTimeString()}`, false, showInfo);
+              
+              // Hide route info panel for auto-loaded routes unless user initiated navigation
+              if (!showInfo && !navigationActive) {
+                document.getElementById('routeInfo').style.display = 'none';
+              }
+            }
+          } else {
+            // If no route on server but we have one locally, it might have been cleared by another client
+            if (currentRouteData && !navigationActive) {
+              console.log('Route cleared by another client');
+              clearNavigation();
+            }
+          }
+        })
+        .catch(error => console.error('Error loading current route:', error));
     }
 
     // Update location info in navigation panel
@@ -2951,6 +2999,7 @@
     setInterval(loadMeasurements, 5000);
     setInterval(loadNotes, 5000);
     setInterval(updateLocationInfo, 5000); // Update location info in navigation panel
+    setInterval(loadCurrentRoute, 3000); // Check for shared routes periodically
 
     // Toggle functionality for split buttons
     document.getElementById('toggleMenu').addEventListener('click', () => {
