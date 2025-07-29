@@ -650,11 +650,16 @@
       color: #333;
     }
     
-    body.mobile-mode #controls button {
+    body.mobile-mode #controls button,
+    body.mobile-mode #controls select {
       padding: 8px 12px;
       margin: 4px 2px;
       font-size: 12px;
       border-radius: 4px;
+    }
+    
+    body.mobile-mode #controls .drawing-controls {
+      display: none;
     }
     
     body.mobile-mode #notesPanel,
@@ -771,28 +776,27 @@
       display: none;
     }
     
-    /* Hide drawing controls on mobile */
-    body.mobile-mode #startDraw,
-    body.mobile-mode #stopDraw,
-    body.mobile-mode #clear,
-    body.mobile-mode #colorPicker,
-    body.mobile-mode label[for="colorPicker"] {
+    /* Mobile minimap button - only show on mobile */
+    #minimapButton {
       display: none;
     }
     
-    /* Make view switch button more prominent on mobile */
-    body.mobile-mode #switchView {
-      background: linear-gradient(135deg, #28a745, #20c997);
+    body.mobile-mode #minimapButton {
+      display: block;
+      background: #28a745;
       color: white;
-      font-weight: bold;
-      padding: 10px 15px;
-      margin: 5px;
+      padding: 12px;
+      margin: 8px 2px;
       border: none;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      width: calc(100% - 4px);
     }
     
-    body.mobile-mode #switchView:hover {
-      background: linear-gradient(135deg, #218838, #1aa085);
+    body.mobile-mode #minimapButton:hover {
+      background: #218838;
     }
   </style>
 </head>
@@ -1043,19 +1047,24 @@
   </div>
 
   <div id="controls">
-    <button id="startDraw">Start Drawing</button>
-    <button id="stopDraw">Stop Drawing</button>
-    <button id="clear">Clear</button>
-    <label for="colorPicker">Color:</label>
-    <select id="colorPicker">
-      <option value="red">Red</option>
-      <option value="blue">Blue</option>
-      <option value="green">Green</option>
-      <option value="black">Black</option>
-      <option value="purple">Purple</option>
-      <option value="orange">Orange</option>
-    </select>
-    <button id="switchView">Switch to Satellite</button>
+    <!-- Mobile minimap button - only visible on mobile -->
+    <button id="minimapButton">📱 Switch to Mini Map</button>
+    
+    <div class="drawing-controls">
+      <button id="startDraw">Start Drawing</button>
+      <button id="stopDraw">Stop Drawing</button>
+      <button id="clear">Clear</button>
+      <label for="colorPicker">Color:</label>
+      <select id="colorPicker">
+        <option value="red">Red</option>
+        <option value="blue">Blue</option>
+        <option value="green">Green</option>
+        <option value="black">Black</option>
+        <option value="purple">Purple</option>
+        <option value="orange">Orange</option>
+      </select>
+    </div>
+    <button id="switchView">Switch View</button>
     <button id="toggleGrid">Show Grid</button>
     <button id="toggleLabels">Hide Phone Labels</button>
     <button id="toggleDirectionArrows">Hide Direction Arrows</button>
@@ -1149,6 +1158,11 @@
       }
     });
     
+    // Mobile minimap button event listener
+    document.getElementById('minimapButton').addEventListener('click', function() {
+      window.location.href = '/minimap';
+    });
+    
     // Focus on password input when page loads
     window.onload = function() {
       document.getElementById('passwordInput').focus();
@@ -1184,7 +1198,7 @@
         map.removeLayer(streetLayer); 
         map.addLayer(satelliteLayer);
         currentBaseLayer = 'satellite'; 
-        this.innerText = "Switch to Weather Radar";
+        this.innerText = "Weather Radar";
         // Hide weather legend
         document.getElementById('weatherLegend').style.display = 'none';
       } else if (currentBaseLayer === 'satellite') {
@@ -1212,7 +1226,7 @@
           window.currentRadarLayer = currentRadarLayer;
         });
         currentBaseLayer = 'weather';
-        this.innerText = "Switch to Street View";
+        this.innerText = "Street View";
         // Show weather legend when radar is active
         document.getElementById('weatherLegend').style.display = 'block';
       } else {
@@ -1223,7 +1237,7 @@
         }
         // Street layer should already be there as base, no need to add again
         currentBaseLayer = 'street'; 
-        this.innerText = "Switch to Satellite";
+        this.innerText = "Satellite View";
         // Hide weather legend when leaving radar view
         document.getElementById('weatherLegend').style.display = 'none';
       }

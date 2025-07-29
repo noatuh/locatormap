@@ -1,0 +1,1267 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Mobile Map Tracker</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    html, body { 
+      margin: 0; 
+      padding: 0; 
+      height: 100%; 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow: hidden;
+    }
+    
+    #map { 
+      height: 100vh; 
+      width: 100vw; 
+      position: fixed;
+      top: 0;
+      left: 0;
+    }
+    
+    /* Password overlay */
+    #passwordOverlay {
+      position: fixed; 
+      top: 0; 
+      left: 0; 
+      width: 100%; 
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.8); 
+      z-index: 10000;
+      display: flex; 
+      justify-content: center; 
+      align-items: center;
+    }
+    
+    #passwordDialog {
+      background: white; 
+      padding: 20px; 
+      border-radius: 12px;
+      text-align: center; 
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      width: 90%;
+      max-width: 300px;
+    }
+    
+    #passwordInput {
+      width: 100%; 
+      padding: 12px; 
+      margin: 15px 0;
+      border: 2px solid #ddd; 
+      border-radius: 8px; 
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+    
+    #passwordSubmit {
+      background-color: #007bff; 
+      color: white; 
+      border: none;
+      padding: 12px 20px; 
+      border-radius: 8px; 
+      cursor: pointer;
+      font-size: 16px; 
+      width: 100%;
+      margin-top: 10px;
+    }
+    
+    #passwordError {
+      color: red; 
+      margin-top: 10px; 
+      display: none;
+    }
+    
+    /* Top control bar */
+    #topControls {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      z-index: 1000;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(2, 1fr);
+      gap: 8px;
+      pointer-events: none;
+    }
+    
+    #topControls button {
+      padding: 12px 8px;
+      background: rgba(255, 255, 255, 0.95);
+      border: none;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      color: #333;
+      pointer-events: auto;
+      touch-action: manipulation;
+    }
+    
+    #topControls button:active {
+      transform: scale(0.95);
+      background: rgba(240, 240, 240, 0.95);
+    }
+    
+    /* Rotation indicator */
+    #toggleRotation {
+      transition: transform 0.3s ease, background-color 0.3s ease;
+    }
+    
+    #toggleRotation.rotating {
+      background: rgba(255, 193, 7, 0.95) !important;
+      color: #333 !important;
+    }
+    
+    /* Bottom info panel */
+    #bottomPanel {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-top-left-radius: 16px;
+      border-top-right-radius: 16px;
+      box-shadow: 0 -2px 15px rgba(0,0,0,0.1);
+      z-index: 1000;
+      max-height: 40vh;
+      overflow-y: auto;
+      transition: transform 0.3s ease;
+    }
+    
+    #bottomPanel.hidden {
+      transform: translateY(calc(100% - 50px));
+    }
+    
+    #panelHandle {
+      width: 40px;
+      height: 4px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 2px;
+      margin: 12px auto 8px;
+      cursor: pointer;
+    }
+    
+    #panelContent {
+      padding: 0 20px 20px;
+    }
+    
+    /* Phone tracking */
+    .phone-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+    
+    .phone-info {
+      flex: 1;
+    }
+    
+    .phone-name {
+      font-weight: 600;
+      font-size: 14px;
+      color: #333;
+    }
+    
+    .phone-details {
+      font-size: 12px;
+      color: #666;
+      margin-top: 2px;
+    }
+    
+    .phone-actions {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .phone-actions button {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    
+    .center-btn {
+      background: #28a745;
+      color: white;
+    }
+    
+    .follow-btn {
+      background: #17a2b8;
+      color: white;
+    }
+    
+    .unfollow-btn {
+      background: #dc3545;
+      color: white;
+    }
+    
+    /* Floating panels */
+    .floating-panel {
+      position: fixed;
+      top: 80px;
+      left: 10px;
+      right: 10px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      z-index: 999;
+      max-height: calc(100vh - 200px);
+      overflow-y: auto;
+      transform: translateY(-120%);
+      transition: transform 0.3s ease;
+      padding: 20px;
+    }
+    
+    .floating-panel:not(.hidden) {
+      transform: translateY(0);
+    }
+    
+    .panel-header {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 15px;
+      color: #333;
+      text-align: center;
+    }
+    
+    .panel-close {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: #666;
+      padding: 5px;
+    }
+    
+    /* Weather panel */
+    #weatherPanel .weather-input-group {
+      margin-bottom: 15px;
+    }
+    
+    #weatherPanel label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #333;
+    }
+    
+    #weatherPanel select,
+    #weatherPanel input {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    
+    #weatherPanel button {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    
+    .weather-btn-primary {
+      background: #007bff;
+      color: white;
+    }
+    
+    .weather-btn-success {
+      background: #28a745;
+      color: white;
+    }
+    
+    #weatherDisplay {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 15px;
+      margin-top: 15px;
+    }
+    
+    /* Radio panel */
+    .radio-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-top: 15px;
+    }
+    
+    .radio-channel {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 10px;
+    }
+    
+    .radio-channel label {
+      display: block;
+      font-weight: 600;
+      font-size: 12px;
+      color: #333;
+      margin-bottom: 5px;
+    }
+    
+    .radio-channel input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    
+    /* Notes panel */
+    #notesList {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    
+    .note-item {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    
+    .note-content {
+      font-size: 14px;
+      color: #333;
+      margin-bottom: 5px;
+    }
+    
+    .note-meta {
+      font-size: 11px;
+      color: #666;
+    }
+    
+    /* Control buttons */
+    .control-group {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 15px;
+    }
+    
+    .control-group button {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    
+    .btn-primary { background: #007bff; color: white; }
+    .btn-success { background: #28a745; color: white; }
+    .btn-danger { background: #dc3545; color: white; }
+    .btn-info { background: #17a2b8; color: white; }
+    
+    /* Hide elements not needed on mobile */
+    .desktop-only {
+      display: none;
+    }
+    
+    /* Touch optimizations */
+    button, input, select {
+      touch-action: manipulation;
+    }
+    
+    /* Weather legend (smaller for mobile) */
+    #weatherLegend {
+      position: fixed;
+      bottom: 100px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      z-index: 998;
+      display: none;
+    }
+    
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 3px;
+    }
+    
+    .legend-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      margin-right: 6px;
+    }
+    
+    .legend-label {
+      color: #333;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <!-- Password overlay -->
+  <div id="passwordOverlay">
+    <div id="passwordDialog">
+      <h2>🗺️ Mobile Map Access</h2>
+      <p>Enter password to access the mobile map:</p>
+      <input type="password" id="passwordInput" placeholder="Enter password">
+      <button id="passwordSubmit">Access Map</button>
+      <div id="passwordError">Incorrect password. Please try again.</div>
+    </div>
+  </div>
+
+  <div id="map"></div>
+  
+  <!-- Top controls -->
+  <div id="topControls">
+    <button id="toggleNotes">📝 Notes</button>
+    <button id="switchView">🗺️ Street</button>
+    <button id="toggleRadio">📻 Radio</button>
+    <button id="toggleRotation">🧭 Rotate</button>
+    <button id="returnToMain">🏠 Main Map</button>
+    <button id="toggleMenu">📱 Devices</button>
+  </div>
+  
+  <!-- Weather radar legend -->
+  <div id="weatherLegend">
+    <div class="legend-item">
+      <div class="legend-color" style="background: linear-gradient(to right, #87CEEB, #4682B4);"></div>
+      <div class="legend-label">Light</div>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background: linear-gradient(to right, #32CD32, #228B22);"></div>
+      <div class="legend-label">Moderate</div>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background: linear-gradient(to right, #FFD700, #FF8C00);"></div>
+      <div class="legend-label">Heavy</div>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background: linear-gradient(to right, #FF4500, #DC143C);"></div>
+      <div class="legend-label">Intense</div>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background: linear-gradient(to right, #8B0000, #4B0000);"></div>
+      <div class="legend-label">Extreme</div>
+    </div>
+  </div>
+  
+  <!-- Bottom device panel -->
+  <div id="bottomPanel">
+    <div id="panelHandle"></div>
+    <div id="panelContent">
+      <h3 style="margin: 0 0 15px 0; color: #333; text-align: center;">📱 Tracked Devices</h3>
+      <div id="phoneList"></div>
+      <div class="control-group" style="margin-top: 15px;">
+        <button class="btn-danger" id="clearAllPhones">Clear All</button>
+        <button class="btn-info" id="shareLocation">Share Location</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Notes Panel -->
+  <div id="notesPanel" class="floating-panel hidden">
+    <button class="panel-close" onclick="togglePanel('notesPanel')">&times;</button>
+    <div class="panel-header">📝 Team Notes</div>
+    <div class="control-group">
+      <button class="btn-success" id="addNote">Add Note</button>
+      <button class="btn-info" id="refreshNotes">Refresh</button>
+    </div>
+    <div id="notesList">
+      <p id="noNotesMessage" style="text-align: center; color: #666;">No notes posted yet</p>
+    </div>
+  </div>
+  
+  <!-- Weather Panel -->
+  <div id="weatherPanel" class="floating-panel hidden">
+    <button class="panel-close" onclick="togglePanel('weatherPanel')">&times;</button>
+    <div class="panel-header">🌤️ Weather Info</div>
+    
+    <div class="weather-input-group">
+      <label>Get Weather For Device:</label>
+      <select id="trackedDeviceSelect">
+        <option value="">Select a tracked device...</option>
+      </select>
+      <button class="weather-btn-primary" id="getWeatherByDevice">Get Weather</button>
+    </div>
+    
+    <div class="weather-input-group">
+      <label>Or Enter ZIP Code:</label>
+      <input type="text" id="zipCodeInput" placeholder="ZIP code (e.g., 90210)">
+      <button class="weather-btn-primary" id="getWeatherByZip">Get Weather</button>
+    </div>
+    
+    <button class="weather-btn-success" id="getWeatherByGPS">📍 Use My Location</button>
+    
+    <div id="weatherDisplay" style="display: none;">
+      <!-- Weather data will be populated here -->
+    </div>
+  </div>
+  
+  <!-- Radio Panel -->
+  <div id="radioPanel" class="floating-panel hidden">
+    <button class="panel-close" onclick="togglePanel('radioPanel')">&times;</button>
+    <div class="panel-header">📻 Radio Frequencies</div>
+    
+    <div class="control-group">
+      <button class="btn-success" id="saveRadio">Save All</button>
+      <button class="btn-danger" id="clearRadio">Clear All</button>
+    </div>
+    
+    <div class="radio-grid" id="radioGrid">
+      <!-- Radio channels will be generated here -->
+    </div>
+  </div>
+  
+  <!-- Note input dialog -->
+  <div id="noteDialog" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); z-index: 2000; width: 90%; max-width: 400px;">
+    <h3 style="margin: 0 0 15px 0; text-align: center;">Add Team Note</h3>
+    <textarea id="noteContent" placeholder="Enter your note here..." style="width: 100%; height: 120px; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; box-sizing: border-box; resize: vertical;"></textarea>
+    <div style="display: flex; gap: 10px; margin-top: 15px;">
+      <button id="cancelNoteBtn" style="flex: 1; padding: 12px; background: #6c757d; color: white; border: none; border-radius: 8px; cursor: pointer;">Cancel</button>
+      <button id="saveNoteBtn" style="flex: 1; padding: 12px; background: #28a745; color: white; border: none; border-radius: 8px; cursor: pointer;">Post Note</button>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    // Password protection
+    const correctPassword = "123";
+    
+    function checkPassword() {
+      const passwordInput = document.getElementById('passwordInput');
+      const passwordError = document.getElementById('passwordError');
+      const passwordOverlay = document.getElementById('passwordOverlay');
+      
+      if (passwordInput.value === correctPassword) {
+        passwordOverlay.style.display = 'none';
+        initializeMap();
+      } else {
+        passwordError.style.display = 'block';
+        passwordInput.value = '';
+        passwordInput.focus();
+      }
+    }
+    
+    document.getElementById('passwordSubmit').addEventListener('click', checkPassword);
+    document.getElementById('passwordInput').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        checkPassword();
+      }
+    });
+    
+    // Focus on password input when page loads
+    window.onload = function() {
+      document.getElementById('passwordInput').focus();
+    };
+    
+    // Panel management
+    function togglePanel(panelId) {
+      const panel = document.getElementById(panelId);
+      const isHidden = panel.classList.contains('hidden');
+      
+      // Hide all other panels
+      document.querySelectorAll('.floating-panel').forEach(p => {
+        if (p.id !== panelId) {
+          p.classList.add('hidden');
+        }
+      });
+      
+      // Toggle the requested panel
+      if (isHidden) {
+        panel.classList.remove('hidden');
+      } else {
+        panel.classList.add('hidden');
+      }
+    }
+    
+    // Bottom panel toggle
+    let bottomPanelCollapsed = false;
+    document.getElementById('panelHandle').addEventListener('click', function() {
+      const panel = document.getElementById('bottomPanel');
+      bottomPanelCollapsed = !bottomPanelCollapsed;
+      if (bottomPanelCollapsed) {
+        panel.classList.add('hidden');
+      } else {
+        panel.classList.remove('hidden');
+      }
+    });
+    
+    function initializeMap() {
+      const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+      const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
+      
+      const map = L.map('map', { 
+        center: [37.7749, -122.4194], 
+        zoom: 5, 
+        layers: [streetLayer],
+        zoomControl: false, // Remove default zoom control for cleaner mobile look
+        bearing: 0 // Initial bearing
+      });
+      
+      // Add zoom control to bottom right
+      L.control.zoom({
+        position: 'bottomright'
+      }).addTo(map);
+      
+      let currentBaseLayer = 'street';
+      const phones = {};
+      let followedPhone = null;
+      let mapRotationEnabled = true;
+      let currentBearing = 0;
+      
+      // Map rotation function - properly rotate the map while preserving functionality
+      function rotateMap(bearing) {
+        if (!mapRotationEnabled) return;
+        
+        currentBearing = bearing;
+        
+        // Get the map container and its center point
+        const mapContainer = map.getContainer();
+        const mapSize = map.getSize();
+        const centerX = mapSize.x / 2;
+        const centerY = mapSize.y / 2;
+        
+        // Apply rotation to the map panes, not the entire container
+        const mapPane = map.getPanes().mapPane;
+        if (mapPane) {
+          mapPane.style.transformOrigin = `${centerX}px ${centerY}px`;
+          mapPane.style.transform = `rotate(${-bearing}deg)`;
+        }
+        
+        // Also rotate tile pane for better performance
+        const tilePane = map.getPanes().tilePane;
+        if (tilePane) {
+          tilePane.style.transformOrigin = `${centerX}px ${centerY}px`;
+          tilePane.style.transform = `rotate(${-bearing}deg)`;
+        }
+        
+        // Rotate overlay pane (for markers)
+        const overlayPane = map.getPanes().overlayPane;
+        if (overlayPane) {
+          overlayPane.style.transformOrigin = `${centerX}px ${centerY}px`;
+          overlayPane.style.transform = `rotate(${-bearing}deg)`;
+        }
+        
+        // Visual feedback - show rotation is active
+        const rotateBtn = document.getElementById('toggleRotation');
+        if (rotateBtn) {
+          rotateBtn.classList.add('rotating');
+          // Don't rotate the button itself, just show it's active
+        }
+      }
+      
+      // Reset map rotation
+      function resetMapRotation() {
+        currentBearing = 0;
+        
+        // Reset all map panes
+        const mapPane = map.getPanes().mapPane;
+        if (mapPane) {
+          mapPane.style.transform = 'none';
+        }
+        
+        const tilePane = map.getPanes().tilePane;
+        if (tilePane) {
+          tilePane.style.transform = 'none';
+        }
+        
+        const overlayPane = map.getPanes().overlayPane;
+        if (overlayPane) {
+          overlayPane.style.transform = 'none';
+        }
+        
+        // Reset rotate button
+        const rotateBtn = document.getElementById('toggleRotation');
+        if (rotateBtn) {
+          rotateBtn.classList.remove('rotating');
+          // Don't reset transform since we're not rotating the button anymore
+        }
+      }
+      
+      // View switching
+      document.getElementById("switchView").onclick = function () {
+        if (currentBaseLayer === 'street') {
+          map.removeLayer(streetLayer);
+          map.addLayer(satelliteLayer);
+          currentBaseLayer = 'satellite';
+          this.innerHTML = '🛰️ Satellite';
+        } else if (currentBaseLayer === 'satellite') {
+          map.removeLayer(satelliteLayer);
+          map.addLayer(streetLayer);
+          getCurrentRadarTime().then(time => {
+            const currentRadarLayer = L.tileLayer(`https://tilecache.rainviewer.com/v2/radar/${time}/256/{z}/{x}/{y}/2/1_1.png`, {
+              attribution: 'Weather data © RainViewer',
+              opacity: 0.8
+            });
+            map.addLayer(currentRadarLayer);
+            window.currentRadarLayer = currentRadarLayer;
+          }).catch(error => {
+            console.error('Failed to load weather radar:', error);
+            const fallbackTime = Math.floor(Date.now() / 1000) - 600;
+            const currentRadarLayer = L.tileLayer(`https://tilecache.rainviewer.com/v2/radar/${fallbackTime}/256/{z}/{x}/{y}/2/1_1.png`, {
+              attribution: 'Weather data © RainViewer',
+              opacity: 0.8
+            });
+            map.addLayer(currentRadarLayer);
+            window.currentRadarLayer = currentRadarLayer;
+          });
+          currentBaseLayer = 'weather';
+          this.innerHTML = '🌧️ Weather';
+          document.getElementById('weatherLegend').style.display = 'block';
+        } else {
+          if (window.currentRadarLayer) {
+            map.removeLayer(window.currentRadarLayer);
+            window.currentRadarLayer = null;
+          }
+          currentBaseLayer = 'street';
+          this.innerHTML = '🗺️ Street';
+          document.getElementById('weatherLegend').style.display = 'none';
+        }
+      };
+      
+      // Get radar time function
+      function getCurrentRadarTime() {
+        return fetch('https://api.rainviewer.com/public/weather-maps.json')
+          .then(response => response.json())
+          .then(data => {
+            if (data.radar && data.radar.past && data.radar.past.length > 0) {
+              return data.radar.past[data.radar.past.length - 1].time;
+            }
+            return Math.floor(Date.now() / 1000) - 600;
+          })
+          .catch(error => {
+            console.error('Error fetching radar time:', error);
+            return Math.floor(Date.now() / 1000) - 600;
+          });
+      }
+      
+      // Phone tracking
+      function updateAllPhones() {
+        return fetch("/load_phones")
+          .then(res => res.json())
+          .then(data => {
+            Object.keys(data).forEach(id => {
+              const lat = data[id].lat;
+              const lng = data[id].lng;
+              const heading = data[id].heading;
+              const alt = data[id].alt;
+              if (typeof lat !== 'number' || typeof lng !== 'number') return;
+              const latlng = [lat, lng];
+
+              if (phones[id] && phones[id].marker) {
+                const oldLat = phones[id].lat;
+                const oldLng = phones[id].lng;
+                phones[id].lat = lat;
+                phones[id].lng = lng;
+                phones[id].marker.setLatLng(latlng);
+                phones[id].alt = alt;
+
+                if (followedPhone === id && (oldLat !== lat || oldLng !== lng)) {
+                  map.setView([lat, lng], Math.max(map.getZoom(), 16));
+                  
+                  // Rotate map if following this phone and it has heading data
+                  if (typeof phones[id].heading === 'number' && mapRotationEnabled) {
+                    rotateMap(phones[id].heading);
+                  }
+                }
+
+                // Update heading and direction arrow
+                if (typeof heading === 'number') {
+                  phones[id].heading = heading;
+                  
+                  // Rotate map if this is the followed phone
+                  if (followedPhone === id && mapRotationEnabled) {
+                    rotateMap(heading);
+                  }
+                  
+                  // Update or create direction arrow normally (map handles rotation)
+                  if (phones[id].directionArrow) {
+                    // Update existing arrow: move it and rotate to actual heading
+                    phones[id].directionArrow.setLatLng(latlng);
+                    phones[id].directionArrow.setIcon(createDirectionArrowIcon(heading));
+                  } else {
+                    // Create new direction arrow with actual heading
+                    phones[id].directionArrow = createDirectionArrow(latlng, heading);
+                  }
+                }
+              } else {
+                phones[id] = { lat: lat, lng: lng, alt: alt };
+                if (typeof heading === 'number') {
+                  phones[id].heading = heading;
+                }
+                
+                phones[id].marker = L.marker(latlng, {
+                  icon: L.icon({
+                    iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
+                    iconSize: [24, 24], 
+                    iconAnchor: [12, 24]
+                  })
+                }).addTo(map);
+                
+                // Create direction arrow if heading data is available
+                if (typeof heading === 'number') {
+                  phones[id].directionArrow = createDirectionArrow(latlng, heading);
+                }
+              }
+            });
+
+            Object.keys(phones).forEach(id => {
+              if (!data[id]) {
+                if (phones[id].marker) map.removeLayer(phones[id].marker);
+                if (phones[id].directionArrow) map.removeLayer(phones[id].directionArrow);
+                if (followedPhone === id) {
+                  followedPhone = null;
+                }
+                delete phones[id];
+              }
+            });
+
+            updatePhoneList();
+            updateTrackedDeviceSelect();
+          })
+          .catch(err => console.error("Failed to load phones:", err));
+      }
+      
+      function updatePhoneList() {
+        const phoneList = document.getElementById('phoneList');
+        phoneList.innerHTML = '';
+        
+        const ids = Object.keys(phones);
+        if (ids.length === 0) {
+          phoneList.innerHTML = '<p style="text-align: center; color: #666; margin: 20px 0;">No devices being tracked</p>';
+        } else {
+          ids.forEach(id => {
+            const phoneItem = document.createElement('div');
+            phoneItem.className = 'phone-item';
+            
+            let displayText = `📱 ${id}`;
+            if (followedPhone === id) {
+              displayText += ' 🎯';
+            }
+            
+            let details = '';
+            if (typeof phones[id].heading === 'number') {
+              const heading = Math.round(phones[id].heading);
+              const cardinalDir = getCardinalDirection(heading);
+              details += `${cardinalDir} (${heading}°) `;
+            }
+            if (typeof phones[id].alt === 'number') {
+              details += `| Alt: ${phones[id].alt.toFixed(1)}m`;
+            }
+            
+            phoneItem.innerHTML = `
+              <div class="phone-info">
+                <div class="phone-name">${displayText}</div>
+                <div class="phone-details">${details}</div>
+              </div>
+              <div class="phone-actions">
+                <button class="center-btn" onclick="centerOnPhone('${id}')">Center</button>
+                <button class="${followedPhone === id ? 'unfollow-btn' : 'follow-btn'}" onclick="toggleFollowPhone('${id}')">
+                  ${followedPhone === id ? 'Unfollow' : 'Follow'}
+                </button>
+              </div>
+            `;
+            
+            phoneList.appendChild(phoneItem);
+          });
+        }
+      }
+      
+      function getCardinalDirection(heading) {
+        const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+        const index = Math.round(heading / 45) % 8;
+        return directions[index];
+      }
+      
+      function createDirectionArrowIcon(heading) {
+        return L.divIcon({
+          className: 'direction-arrow',
+          html: `<div style="
+            width: 50px; 
+            height: 50px; 
+            position: relative;
+            transform: rotate(${heading}deg);
+            pointer-events: none;
+          ">
+            <div style="
+              position: absolute;
+              top: 8px;
+              left: 50%;
+              transform: translateX(-50%);
+              width: 0;
+              height: 0;
+              border-left: 8px solid transparent;
+              border-right: 8px solid transparent;
+              border-bottom: 24px solid #ff4444;
+              filter: drop-shadow(0 0 3px rgba(0,0,0,0.5));
+            "></div>
+          </div>`,
+          iconSize: [50, 50],
+          iconAnchor: [25, 25]
+        });
+      }
+
+      function createDirectionArrow(latlng, heading) {
+        const arrow = L.marker(latlng, {
+          icon: createDirectionArrowIcon(heading)
+        }).addTo(map);
+        
+        return arrow;
+      }
+      
+      window.centerOnPhone = async function(phoneId) {
+        await updateAllPhones();
+        if (phones[phoneId] && phones[phoneId].lat !== undefined && phones[phoneId].lng !== undefined) {
+          map.setView([phones[phoneId].lat, phones[phoneId].lng], 16);
+        }
+      };
+      
+      window.toggleFollowPhone = function(phoneId) {
+        if (followedPhone === phoneId) {
+          followedPhone = null;
+          // Reset map rotation when unfollowing
+          resetMapRotation();
+        } else {
+          followedPhone = phoneId;
+          if (phones[phoneId] && phones[phoneId].lat !== undefined && phones[phoneId].lng !== undefined) {
+            map.setView([phones[phoneId].lat, phones[phoneId].lng], Math.max(map.getZoom(), 16));
+            
+            // Apply rotation if phone has heading data
+            if (typeof phones[phoneId].heading === 'number' && mapRotationEnabled) {
+              rotateMap(phones[phoneId].heading);
+            }
+          }
+        }
+        updatePhoneList();
+      };
+      
+      function updateTrackedDeviceSelect() {
+        const select = document.getElementById('trackedDeviceSelect');
+        const currentValue = select.value;
+        select.innerHTML = '<option value="">Select a tracked device...</option>';
+        
+        Object.keys(phones).forEach(phoneId => {
+          const option = document.createElement('option');
+          option.value = phoneId;
+          option.textContent = phoneId;
+          select.appendChild(option);
+        });
+        
+        if (currentValue && phones[currentValue]) {
+          select.value = currentValue;
+        }
+      }
+      
+      // Panel toggles
+      document.getElementById('toggleNotes').addEventListener('click', () => togglePanel('notesPanel'));
+      document.getElementById('toggleRadio').addEventListener('click', () => togglePanel('radioPanel'));
+      document.getElementById('returnToMain').addEventListener('click', () => {
+        window.location.href = '/';
+      });
+      document.getElementById('toggleRotation').addEventListener('click', () => {
+        mapRotationEnabled = !mapRotationEnabled;
+        const btn = document.getElementById('toggleRotation');
+        if (mapRotationEnabled) {
+          btn.innerHTML = '🧭 Rotate';
+          btn.classList.remove('rotating');
+          btn.style.background = '';
+          btn.style.color = '';
+          // Apply rotation if following a phone with heading
+          if (followedPhone && phones[followedPhone] && typeof phones[followedPhone].heading === 'number') {
+            rotateMap(phones[followedPhone].heading);
+            btn.classList.add('rotating');
+          }
+        } else {
+          btn.innerHTML = '🧭 Fixed';
+          btn.classList.remove('rotating');
+          btn.style.background = 'rgba(220, 53, 69, 0.9)';
+          btn.style.color = 'white';
+          resetMapRotation();
+        }
+      });
+      document.getElementById('toggleMenu').addEventListener('click', () => {
+        const panel = document.getElementById('bottomPanel');
+        bottomPanelCollapsed = !bottomPanelCollapsed;
+        if (bottomPanelCollapsed) {
+          panel.classList.add('hidden');
+        } else {
+          panel.classList.remove('hidden');
+        }
+      });
+      
+      // Share location functionality
+      document.getElementById('shareLocation').addEventListener('click', () => {
+        if (!navigator.geolocation) {
+          alert("Geolocation is not supported by your browser.");
+          return;
+        }
+
+        const phoneId = prompt("Enter your name or device ID:", "mobile-user");
+        if (!phoneId) return;
+
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const data = {
+              id: phoneId,
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+              heading: position.coords.heading || null,
+              alt: position.coords.altitude || null
+            };
+
+            fetch("/update_location", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(data)
+            })
+            .then(res => res.json())
+            .then(result => {
+              if (result.status === "updated") {
+                alert(`Location shared successfully as "${phoneId}"`);
+                updateAllPhones();
+              }
+            })
+            .catch(err => {
+              console.error("Error sharing location:", err);
+              alert("Failed to share location. Please try again.");
+            });
+          },
+          (error) => {
+            console.error("Geolocation error:", error);
+            alert("Unable to get your location. Please check your browser settings.");
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 60000
+          }
+        );
+      });
+      
+      // Radio frequencies
+      function createRadioChannels() {
+        const radioGrid = document.getElementById('radioGrid');
+        radioGrid.innerHTML = '';
+        
+        for (let i = 1; i <= 40; i++) {
+          const channelDiv = document.createElement('div');
+          channelDiv.className = 'radio-channel';
+          
+          channelDiv.innerHTML = `
+            <label>CH${i}:</label>
+            <input type="text" id="channel${i}" placeholder="Frequency" maxlength="20">
+          `;
+          
+          radioGrid.appendChild(channelDiv);
+        }
+      }
+      
+      function loadRadioFrequencies() {
+        fetch('/load_radio_frequencies')
+          .then(response => response.json())
+          .then(frequencies => {
+            for (let i = 1; i <= 40; i++) {
+              const input = document.getElementById(`channel${i}`);
+              if (input && frequencies[i.toString()]) {
+                input.value = frequencies[i.toString()];
+              }
+            }
+          })
+          .catch(error => console.error('Error loading radio frequencies:', error));
+      }
+      
+      function saveRadioFrequencies() {
+        const frequencies = {};
+        
+        for (let i = 1; i <= 40; i++) {
+          const input = document.getElementById(`channel${i}`);
+          if (input) {
+            frequencies[i.toString()] = input.value.trim();
+          }
+        }
+        
+        fetch('/save_radio_frequencies', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(frequencies)
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.status === 'saved') {
+            const saveBtn = document.getElementById('saveRadio');
+            const originalText = saveBtn.textContent;
+            saveBtn.textContent = 'Saved!';
+            setTimeout(() => {
+              saveBtn.textContent = originalText;
+            }, 1000);
+          }
+        })
+        .catch(error => console.error('Error saving radio frequencies:', error));
+      }
+      
+      // Initialize radio functionality
+      createRadioChannels();
+      loadRadioFrequencies();
+      
+      document.getElementById('saveRadio').addEventListener('click', saveRadioFrequencies);
+      document.getElementById('clearRadio').addEventListener('click', () => {
+        if (confirm('Clear all radio frequencies?')) {
+          for (let i = 1; i <= 40; i++) {
+            const input = document.getElementById(`channel${i}`);
+            if (input) input.value = '';
+          }
+          saveRadioFrequencies();
+        }
+      });
+      
+      // Auto-save radio frequencies
+      document.getElementById('radioGrid').addEventListener('input', function(e) {
+        if (e.target.tagName === 'INPUT') {
+          clearTimeout(window.radioSaveTimeout);
+          window.radioSaveTimeout = setTimeout(saveRadioFrequencies, 2000);
+        }
+      });
+      
+      // Notes functionality
+      let notes = [];
+      
+      function loadNotes() {
+        fetch('/load_notes')
+          .then(response => response.json())
+          .then(data => {
+            notes = data;
+            displayNotes();
+          })
+          .catch(error => console.error('Error loading notes:', error));
+      }
+      
+      function displayNotes() {
+        const notesList = document.getElementById('notesList');
+        const noNotesMessage = document.getElementById('noNotesMessage');
+        
+        if (notes.length === 0) {
+          noNotesMessage.style.display = 'block';
+          notesList.innerHTML = '<p id="noNotesMessage" style="text-align: center; color: #666;">No notes posted yet</p>';
+        } else {
+          noNotesMessage.style.display = 'none';
+          notesList.innerHTML = notes.map(note => `
+            <div class="note-item">
+              <div class="note-content">${note.content}</div>
+              <div class="note-meta">Posted: ${new Date(note.timestamp).toLocaleString()}</div>
+            </div>
+          `).join('');
+        }
+      }
+      
+      document.getElementById('addNote').addEventListener('click', () => {
+        document.getElementById('noteDialog').style.display = 'block';
+        document.getElementById('noteContent').focus();
+      });
+      
+      document.getElementById('cancelNoteBtn').addEventListener('click', () => {
+        document.getElementById('noteDialog').style.display = 'none';
+        document.getElementById('noteContent').value = '';
+      });
+      
+      document.getElementById('saveNoteBtn').addEventListener('click', () => {
+        const content = document.getElementById('noteContent').value.trim();
+        if (!content) return;
+        
+        const note = {
+          id: Date.now().toString(),
+          content: content,
+          timestamp: new Date().toISOString()
+        };
+        
+        fetch('/save_note', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(note)
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.status === 'saved') {
+            document.getElementById('noteDialog').style.display = 'none';
+            document.getElementById('noteContent').value = '';
+            loadNotes();
+          }
+        })
+        .catch(error => console.error('Error saving note:', error));
+      });
+      
+      document.getElementById('refreshNotes').addEventListener('click', loadNotes);
+      
+      // Weather functionality (simplified for mobile)
+      document.getElementById('getWeatherByGPS').addEventListener('click', () => {
+        if (!navigator.geolocation) {
+          alert("Geolocation not supported");
+          return;
+        }
+        
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            // Simple weather display for mobile
+            document.getElementById('weatherDisplay').innerHTML = `
+              <div style="text-align: center; padding: 20px;">
+                <h3>Weather for Current Location</h3>
+                <p>Lat: ${position.coords.latitude.toFixed(4)}</p>
+                <p>Lng: ${position.coords.longitude.toFixed(4)}</p>
+                <p style="color: #666; font-size: 12px;">Weather API integration can be added here</p>
+              </div>
+            `;
+            document.getElementById('weatherDisplay').style.display = 'block';
+          },
+          (error) => alert("Unable to get location")
+        );
+      });
+      
+      // Clear all phones
+      document.getElementById('clearAllPhones').addEventListener('click', () => {
+        if (confirm("Clear all tracked devices?")) {
+          fetch("/save_phones", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({})
+          })
+          .then(() => {
+            Object.keys(phones).forEach(id => {
+              if (phones[id].marker) map.removeLayer(phones[id].marker);
+              if (phones[id].directionArrow) map.removeLayer(phones[id].directionArrow);
+              delete phones[id];
+            });
+            followedPhone = null;
+            updatePhoneList();
+          });
+        }
+      });
+      
+      // Initialize
+      updateAllPhones();
+      loadNotes();
+      
+      // Update phones periodically
+      setInterval(updateAllPhones, 3000);
+    }
+  </script>
+</body>
+</html>

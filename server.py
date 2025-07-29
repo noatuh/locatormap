@@ -4,6 +4,11 @@ import os
 import requests
 import time
 
+# Load config
+with open('config.json') as config_file:
+    config = json.load(config_file)
+OPENWEATHERMAP_API_KEY = config.get('openweathermap_api_key')
+
 app = Flask(__name__)
 DATA_FILE = "drawings.json"
 PHONES_FILE = "phones.json"
@@ -14,6 +19,10 @@ RADIO_FILE = "radio_frequencies.json"
 @app.route("/")
 def index():
     return render_template("index.html")
+
+@app.route("/minimap")
+def minimap():
+    return render_template("minimap.html")
 
 @app.route("/save", methods=["POST"])
 def save():
