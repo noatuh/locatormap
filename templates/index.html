@@ -435,6 +435,52 @@
       border-right: 3px solid transparent;
       border-bottom: 6px solid #d32f2f;
     }
+
+    /* Weather radar legend styles */
+    #weatherLegend {
+      position: fixed;
+      bottom: 120px;
+      left: 20px;
+      background: rgba(255, 255, 255, 0.95);
+      border: 2px solid #333;
+      border-radius: 8px;
+      padding: 12px;
+      z-index: 2000;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+      font-family: Arial, sans-serif;
+      display: none; /* Hidden by default, shown only when weather radar is active */
+      min-width: 180px;
+    }
+
+    .legend-title {
+      font-weight: bold;
+      font-size: 14px;
+      margin-bottom: 8px;
+      text-align: center;
+      color: #333;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 4px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+
+    .legend-color {
+      width: 20px;
+      height: 12px;
+      margin-right: 8px;
+      border: 1px solid #333;
+      border-radius: 2px;
+    }
+
+    .legend-label {
+      color: #333;
+      font-weight: 500;
+    }
   </style>
 </head>
 <body>
@@ -459,6 +505,31 @@
       <div class="compass-direction east">E</div>
       <div class="compass-direction west">W</div>
       <div class="compass-needle"></div>
+    </div>
+  </div>
+  
+  <!-- Weather radar legend -->
+  <div id="weatherLegend">
+    <div class="legend-title">🌧️ Precipitation</div>
+    <div class="legend-item">
+      <div class="legend-color" style="background: linear-gradient(to right, #87CEEB, #4682B4);"></div>
+      <div class="legend-label">Light</div>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background: linear-gradient(to right, #32CD32, #228B22);"></div>
+      <div class="legend-label">Moderate</div>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background: linear-gradient(to right, #FFD700, #FF8C00);"></div>
+      <div class="legend-label">Heavy</div>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background: linear-gradient(to right, #FF4500, #DC143C);"></div>
+      <div class="legend-label">Intense</div>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color" style="background: linear-gradient(to right, #8B0000, #4B0000);"></div>
+      <div class="legend-label">Extreme</div>
     </div>
   </div>
   
@@ -665,6 +736,8 @@
         map.addLayer(satelliteLayer);
         currentBaseLayer = 'satellite'; 
         this.innerText = "Switch to Weather Radar";
+        // Hide weather legend
+        document.getElementById('weatherLegend').style.display = 'none';
       } else if (currentBaseLayer === 'satellite') {
         // Switch from Satellite to Weather Radar
         map.removeLayer(satelliteLayer);
@@ -691,6 +764,8 @@
         });
         currentBaseLayer = 'weather';
         this.innerText = "Switch to Street View";
+        // Show weather legend when radar is active
+        document.getElementById('weatherLegend').style.display = 'block';
       } else {
         // Switch from Weather Radar back to Street
         if (window.currentRadarLayer) {
@@ -700,6 +775,8 @@
         // Street layer should already be there as base, no need to add again
         currentBaseLayer = 'street'; 
         this.innerText = "Switch to Satellite";
+        // Hide weather legend when leaving radar view
+        document.getElementById('weatherLegend').style.display = 'none';
       }
     };
 
