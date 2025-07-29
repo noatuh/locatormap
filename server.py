@@ -9,6 +9,7 @@ DATA_FILE = "drawings.json"
 PHONES_FILE = "phones.json"
 MEASUREMENTS_FILE = "measurements.json"
 NOTES_FILE = "notes.json"
+RADIO_FILE = "radio_frequencies.json"
 
 @app.route("/")
 def index():
@@ -467,6 +468,45 @@ def calculate_distance(lat1, lng1, lat2, lng2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
     
     return R * c
+
+@app.route("/save_radio_frequencies", methods=["POST"])
+def save_radio_frequencies():
+    """Save all radio frequencies at once"""
+    frequencies = request.get_json()
+    
+    with open(RADIO_FILE, "w") as f:
+        json.dump(frequencies, f)
+    
+    return jsonify({"status": "saved"})
+
+@app.route("/load_radio_frequencies", methods=["GET"])
+def load_radio_frequencies():
+    """Load all radio frequencies"""
+    if not os.path.exists(RADIO_FILE):
+        # Initialize with empty channels 1-40
+        default_frequencies = {str(i): "" for i in range(1, 41)}
+        return jsonify(default_frequencies)
+    
+    with open(RADIO_FILE, "r") as f:
+        try:
+            frequencies = json.load(f)
+            # Ensure all channels 1-40 exist
+            for i in range(1, 41):
+                if str(i) not in frequencies:
+                    frequencies[str(i)] = ""
+            return jsonify(frequencies)
+        except json.JSONDecodeError:
+            # Return default if file is corrupted
+            default_frequencies = {str(i): "" for i in range(1, 41)}
+            return jsonify(default_frequencies)
+
+@app.route("/clear_radio_frequencies", methods=["POST"])
+def clear_radio_frequencies():
+    """Clear all radio frequencies"""
+    default_frequencies = {str(i): "" for i in range(1, 41)}
+    with open(RADIO_FILE, "w") as f:
+        json.dump(default_frequencies, f)
+    return jsonify({"status": "cleared"})
 
 if __name__ == "__main__":
     print("Starting main server on port 5050...")
