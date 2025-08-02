@@ -8,10 +8,32 @@ import sys
 import os
 import math
 
-DEFAULT_SERVER_IP = "24.95.163.76:5050"
+# Configuration file for storing server settings
+CONFIG_FILE = "server_config.json"
 
 app = Flask(__name__)
 CORS(app)
+
+def load_config():
+    """Load server configuration from JSON file"""
+    try:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+                return config.get('server_ip_port', None)
+    except Exception as e:
+        print(f"Error loading config: {e}")
+    return None
+
+def save_config(server_ip_port):
+    """Save server configuration to JSON file"""
+    try:
+        config = {'server_ip_port': server_ip_port}
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(config, f, indent=2)
+        print(f"✓ Server configuration saved to {CONFIG_FILE}")
+    except Exception as e:
+        print(f"Error saving config: {e}")
 
 def get_input_with_default(prompt, default_value=None):
     if default_value:
@@ -247,8 +269,28 @@ if __name__ == "__main__":
     print("GPS Location Sender with Movement Direction")
     print("-------------------------------------------")
     
-    # Get server IP from user or use default
-    server_ip_port = get_input_with_default("Enter server IP:port", DEFAULT_SERVER_IP)
+    # Load existing server configuration or prompt for new one
+    saved_ip = load_config()
+    
+    if saved_ip:
+        print(f"Found saved server configuration: {saved_ip}")
+        use_saved = input("Use saved server IP? (y/n, default: y): ").strip().lower()
+        if use_saved in ['', 'y', 'yes']:
+            server_ip_port = saved_ip
+        else:
+            server_ip_port = input("Enter new server IP:port: ").strip()
+            if server_ip_port:
+                save_config(server_ip_port)
+    else:
+        print("No saved server configuration found.")
+        server_ip_port = input("Enter server IP:port: ").strip()
+        if server_ip_port:
+            save_config(server_ip_port)
+    
+    if not server_ip_port:
+        print("Error: Server IP:port is required.")
+        sys.exit(1)
+    
     SERVER_URL = f"http://{server_ip_port}/update_location"
     
     # Get phone ID, limited to 5 characters
